@@ -54,6 +54,8 @@ SIMPLE_WORKFLOW_BASE_PREFIX = "_VBASE"
 SIMPLE_WORKFLOW_HEIGHT_PREFIX = "_VHEIGHT"
 SIMPLE_WORKFLOW_BASE_HEIGHT_COLUMN_NAME = "_VBASEmean"
 SIMPLE_WORKFLOW_HEIGHT_COLUMN_NAME = "_VHEIGHTmean"
+CONSTANT_DEFAULT_SAMPLE_MULTIPLIER = 2
+DEFAULT_SAMPLE_STEP_SIZE = 1.00
 
 ICON_PATH = ":/plugins/VolumeCalculationTool/icon.svg"
 
@@ -386,7 +388,7 @@ class VolumeCalculationTool:
             band_list = []
             for i in range(1,band_count+1):
                 self.dlg.mFieldComboBandBase.addItem(str(i))
-        catch IndexError:
+        except IndexError:
             self.dlg.popFatalErrorBox("No polygon layers found ! Restart the plugin and make sure polygon layers are available")
             return
             
@@ -415,18 +417,16 @@ class VolumeCalculationTool:
 
         # Create the dialog with elements (after translation) and keep reference
         # Only create GUI ONCE in callback, so that it will only load when the plugin is started
-        if self.first_start == True:
-            self.first_start = False
-            self.dlg = VolumeCalculationToolDialog(self.determineBandListForHeight, self.determineBandListForBase, self.workflow, self.cancelLongWorkflow)
+        #if self.first_start == True:
+        #    self.first_start = False
+        self.dlg = VolumeCalculationToolDialog(self.updateDefaultSampleStepOnHeightLayerChange, self.determineBandListForHeight, self.determineBandListForBase, self.workflow, self.cancelLongWorkflow)
         
         self.populateInputOptions()
+        self.updateDefaultSampleStepOnHeightLayerChange(0)
         # show the dialog
         self.dlg.show()
         # Run the dialog event loop
         result = self.dlg.exec_()
-        # See if OK was pressed
-        if result:
-            pass
         
     def cancelLongWorkflow(self):
         self.task_manager.cancelAll()
@@ -655,3 +655,15 @@ class VolumeCalculationTool:
         self.task_manager.addTask(accurate_task)
         self.dlg.progressBar.setValue(0)
         self.dlg.lockupGUIDuringCalculation()
+        
+    def updateDefaultSampleStepOnHeightLayerChange(self, index):
+        step_size = self.determineDefaultSamplingFromHeightLayer()
+        self.dlg.doubleSpinBoxSampleStepX.setValue(step_size)
+        self.dlg.doubleSpinBoxSampleStepY.setValue(step_size)
+
+    def determineDefaultSamplingFromHeightLayer(self):
+        top_entry = self.dlg.mFieldComboHeightLayer.currentText()
+        if top_entry == "":
+            return DEFAULT_SAMPLE_STEP_SIZE
+        x_pixel_size = round(abs((QgsProject.instance().mapLayersByName(top_entry)[0]).rasterUnitsPerPixelX()),2)
+        return (x_pixel_size * CONSTANT_DEFAULT_SAMPLE_MULTIPLIER)

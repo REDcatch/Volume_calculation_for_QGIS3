@@ -86,7 +86,7 @@ class CountOptions(Enum):
 
 
 class VolumeCalculationToolDialog(QtWidgets.QDialog, FORM_CLASS):
-    def __init__(self, determineBandsForHeight, determineBandsForBase, workflow_function, cancel_long_workflow, parent=None):
+    def __init__(self, updateDefaultSampleStepOnHeightLayerChange, determineBandsForHeight, determineBandsForBase, workflow_function, cancel_long_workflow, parent=None):
         """Constructor."""
         super().__init__()
         self.setupUi(self)
@@ -101,21 +101,20 @@ class VolumeCalculationToolDialog(QtWidgets.QDialog, FORM_CLASS):
         self.pushButtonHelp.clicked.connect(self.show_help)
         self.pushButtonStartCalculation.setEnabled(False)
         self.pushButtonCancelCalculation.setEnabled(False)
-        
         self.mFieldComboHeightLayerBase.setEnabled(False)
         self.mFieldComboBandBase.setEnabled(False)
         self.doubleSpinBoxBaseLevel.setEnabled(False)
-        
         self.mFieldComboHeightLayer.currentIndexChanged.connect(determineBandsForHeight)
+        self.mFieldComboHeightLayer.currentIndexChanged.connect(updateDefaultSampleStepOnHeightLayerChange)
         self.mFieldComboHeightLayerBase.currentIndexChanged.connect(determineBandsForBase)
-        
         self.mFieldComboBaseLevelMethod.currentIndexChanged.connect(self.toggleBaseLevelOptions)
         self.progressBar.reset()
         self.progressBar.setRange(0, 100)
         self.doubleSpinBoxBaseLevel.setValue(0.00)
         self.doubleSpinBoxBaseLevel.setRange(-100000, 100000)
-        self.doubleSpinBoxSampleStepX.setValue(0.20)
-        self.doubleSpinBoxSampleStepY.setValue(0.20)
+        
+        self.doubleSpinBoxSampleStepX.setValue(1)
+        self.doubleSpinBoxSampleStepY.setValue(1)
         self.doubleSpinBoxSampleStepX.setRange(0, 100000)
         self.doubleSpinBoxSampleStepY.setRange(0, 100000)
         self.logOutput.setReadOnly(True)
@@ -141,7 +140,7 @@ class VolumeCalculationToolDialog(QtWidgets.QDialog, FORM_CLASS):
             self.mFieldComboHeightLayerBase.setEnabled(False)
             self.mFieldComboBandBase.setEnabled(False)
             self.doubleSpinBoxBaseLevel.setEnabled(True)
-    
+
     def closeIt(self): 
         self.close()
         
