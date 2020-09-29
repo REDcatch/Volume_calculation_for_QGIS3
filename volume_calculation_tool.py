@@ -370,17 +370,25 @@ class VolumeCalculationTool:
             
     def populateBandListForHeight(self, layer_name):
         self.dlg.mFieldComboBand.clear()
-        band_count = QgsProject.instance().mapLayersByName(layer_name)[0].bandCount()
-        band_list = []
-        for i in range(1,band_count+1):
-            self.dlg.mFieldComboBand.addItem(str(i))
+        try:
+            band_count = QgsProject.instance().mapLayersByName(layer_name)[0].bandCount()
+            band_list = []
+            for i in range(1,band_count+1):
+                self.dlg.mFieldComboBand.addItem(str(i))
+        except IndexError:
+            self.dlg.popFatalErrorBox("No DEM layers found ! Restart the plugin and make sure DEM layers are available")
+            return
             
     def populateBandListForBase(self, layer_name):
-        self.dlg.mFieldComboBandBase.clear()
-        band_count = QgsProject.instance().mapLayersByName(layer_name)[0].bandCount()
-        band_list = []
-        for i in range(1,band_count+1):
-            self.dlg.mFieldComboBandBase.addItem(str(i))
+        try:
+            self.dlg.mFieldComboBandBase.clear()
+            band_count = QgsProject.instance().mapLayersByName(layer_name)[0].bandCount()
+            band_list = []
+            for i in range(1,band_count+1):
+                self.dlg.mFieldComboBandBase.addItem(str(i))
+        catch IndexError:
+            self.dlg.popFatalErrorBox("No polygon layers found ! Restart the plugin and make sure polygon layers are available")
+            return
             
     def determineBandListForHeight(self, index):
         self.populateBandListForHeight(self.dlg.mFieldComboHeightLayer.currentText())
@@ -468,8 +476,16 @@ class VolumeCalculationTool:
         self.updateOutputLog()
         self.writeResultsToLayer()
         self.cleanUpFields()
+    
+    def validateMinimumInput(self):
+        dem_layers = self.dlg.mFieldComboHeightLayer.count()
+        vector_layers = self.dlg.mFieldComboPolygon.count()
+        if vector_layers == 0 or dem_layers == 0:
+            self.dlg.closeIt()
+            self.dlg.popFatalErrorBox("No DEM layers or polygon layers found/selected ! Closing plugin, please make sure both are available")
         
     def gatherInputInfo(self):
+        self.validateMinimumInput()
         height_layer = QgsProject.instance().mapLayersByName(self.dlg.mFieldComboHeightLayer.currentText())[0]
         vector_layer = QgsProject.instance().mapLayersByName(self.dlg.mFieldComboPolygon.currentText())[0]
         height_base_band = int(self.dlg.mFieldComboBandBase.currentText())

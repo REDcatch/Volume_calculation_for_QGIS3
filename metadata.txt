@@ -18,7 +18,7 @@ hasProcessingProvider=no
 # Tags are comma separated with spaces allowed
 tags=vector, dem, calculator, processing, raster, statistics, analysis, volume, drone
 
-homepage=www.redcatch.at
+homepage=https://www.redcatch.at
 category=Plugins
 icon=icon.png
 # experimental flag

@@ -34,7 +34,8 @@ import os
 from qgis.PyQt import uic
 from qgis.PyQt import QtWidgets
 from qgis.PyQt.QtGui import QDesktopServices
-from qgis.PyQt.QtCore import QUrl 
+from qgis.PyQt.QtWidgets import QMessageBox
+from qgis.PyQt.QtCore import QUrl
 from enum import Enum
 
 DEFAULT_ATTRIBUTE_NAME = "VOLUME"
@@ -113,9 +114,9 @@ class VolumeCalculationToolDialog(QtWidgets.QDialog, FORM_CLASS):
         self.progressBar.setRange(0, 100)
         self.doubleSpinBoxBaseLevel.setValue(0.00)
         self.doubleSpinBoxBaseLevel.setRange(-100000, 100000)
-        self.doubleSpinBoxSampleStepX.setValue(1.00)
+        self.doubleSpinBoxSampleStepX.setValue(0.20)
+        self.doubleSpinBoxSampleStepY.setValue(0.20)
         self.doubleSpinBoxSampleStepX.setRange(0, 100000)
-        self.doubleSpinBoxSampleStepY.setValue(1.00)
         self.doubleSpinBoxSampleStepY.setRange(0, 100000)
         self.logOutput.setReadOnly(True)
         self.fieldName.setPlaceholderText(DEFAULT_ATTRIBUTE_NAME)
@@ -204,4 +205,9 @@ class VolumeCalculationToolDialog(QtWidgets.QDialog, FORM_CLASS):
         self.mFieldComboPolygon.setEnabled(True)
         self.checkBox_add_field.setEnabled(True)
         self.fieldName.setEnabled(True)
-        self.fieldName.setEnabled(True)
+        self.fieldName_2.setEnabled(True)
+        
+    def popFatalErrorBox(self, error_msg):
+        msgBox = QMessageBox()
+        msgBox.setText(error_msg)
+        msgBox.exec_()
