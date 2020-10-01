@@ -122,7 +122,7 @@ class VolumeTaskOptions():
             str_repr += "St ep Size X: " + str(self.step_size_x) + "\n"
             str_repr += "Step Size Y: " + str(self.step_size_y) + "\n"
             return str_repr
-
+        return str_repr
 
 class AccurateVolumeCalculationTask(QgsTask):
     
