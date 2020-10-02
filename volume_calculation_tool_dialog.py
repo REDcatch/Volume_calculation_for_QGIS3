@@ -38,8 +38,8 @@ from qgis.PyQt.QtWidgets import QMessageBox
 from qgis.PyQt.QtCore import QUrl
 from enum import Enum
 
-DEFAULT_ATTRIBUTE_NAME = "VOLUME"
-DEFAULT_ATTRIBUTE_NAME_NEG = "BELOW_VOLUME"
+DEFAULT_ATTRIBUTE_NAME = "V_above"
+DEFAULT_ATTRIBUTE_NAME_NEG = "V_below"
 
 # This loads your .ui file so that PyQt can populate your plugin with the elements from Qt Designer
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
@@ -91,23 +91,25 @@ class VolumeCalculationToolDialog(QtWidgets.QDialog, FORM_CLASS):
         super().__init__()
         self.setupUi(self)
         self.populateStaticOptions()
-        self.radioButtonAccurate.setChecked(False)
+        self.radioButtonAccurate.setChecked(True)
         self.radioButtonSimple.setChecked(False)
         self.toggleAccurateWorkFlow()
+
         self.radioButtonSimple.toggled.connect(self.toggleWorkflow)
         self.radioButtonAccurate.toggled.connect(self.toggleAccurateWorkFlow)
         self.pushButtonStartCalculation.clicked.connect(workflow_function)
         self.pushButtonCancelCalculation.clicked.connect(cancel_long_workflow)
         self.pushButtonHelp.clicked.connect(self.show_help)
-        self.pushButtonStartCalculation.setEnabled(False)
-        self.pushButtonCancelCalculation.setEnabled(False)
+
         self.mFieldComboHeightLayerBase.setEnabled(False)
         self.mFieldComboBandBase.setEnabled(False)
         self.doubleSpinBoxBaseLevel.setEnabled(False)
+        
         self.mFieldComboHeightLayer.currentIndexChanged.connect(determineBandsForHeight)
         self.mFieldComboHeightLayer.currentIndexChanged.connect(updateDefaultSampleStepOnHeightLayerChange)
         self.mFieldComboHeightLayerBase.currentIndexChanged.connect(determineBandsForBase)
         self.mFieldComboBaseLevelMethod.currentIndexChanged.connect(self.toggleBaseLevelOptions)
+        
         self.progressBar.reset()
         self.progressBar.setRange(0, 100)
         self.doubleSpinBoxBaseLevel.setValue(0.00)
@@ -153,6 +155,7 @@ class VolumeCalculationToolDialog(QtWidgets.QDialog, FORM_CLASS):
         isActivatedAccurate = self.radioButtonAccurate.isChecked()
         self.progressBar.reset()
         self.pushButtonStartCalculation.setEnabled(isActivatedSimple or isActivatedAccurate)
+        self.pushButtonCancelCalculation.setEnabled(isActivatedSimple or isActivatedAccurate)
         
     def toggleAccurateWorkFlow(self):
         isActivated = self.radioButtonAccurate.isChecked()
@@ -166,8 +169,8 @@ class VolumeCalculationToolDialog(QtWidgets.QDialog, FORM_CLASS):
         self.mFieldComboCountingMethod.addItem(str(CountOptions.COUNT_ABOVE_AND_BELOW))
         self.mFieldComboCountingMethod.addItem(str(CountOptions.COUNT_ONLY_ABOVE))
         self.mFieldComboCountingMethod.addItem(str(CountOptions.COUNT_ONLY_BELOW))
-        self.mFieldComboCountingMethod.addItem(str(CountOptions.SUBTRACT_VOL_BELOW))
-        self.mFieldComboCountingMethod.addItem(str(CountOptions.ADD_VOL_BELOW_TO_ABOVE))
+        #self.mFieldComboCountingMethod.addItem(str(CountOptions.SUBTRACT_VOL_BELOW))
+        #self.mFieldComboCountingMethod.addItem(str(CountOptions.ADD_VOL_BELOW_TO_ABOVE))
         self.mFieldComboBaseLevelMethod.addItem(str(BaseLevelOptions.APPROXIMATE_VIA_MIN))
         self.mFieldComboBaseLevelMethod.addItem(str(BaseLevelOptions.APPROXIMATE_VIA_AVG))
         self.mFieldComboBaseLevelMethod.addItem(str(BaseLevelOptions.USE_DEM_LAYER))
@@ -210,3 +213,6 @@ class VolumeCalculationToolDialog(QtWidgets.QDialog, FORM_CLASS):
         msgBox = QMessageBox()
         msgBox.setText(error_msg)
         msgBox.exec_()
+        
+    def popAboutBox(self):
+        pass

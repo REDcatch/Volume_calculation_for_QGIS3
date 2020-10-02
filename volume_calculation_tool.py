@@ -119,7 +119,7 @@ class VolumeTaskOptions():
         str_repr += "Base Line Option: " + str(self.base_line_option) + "\n"
         if self.isInAccurateWorkflow:
             str_repr += "Counting Option: " + str(self.counting_option) + "\n"
-            str_repr += "St ep Size X: " + str(self.step_size_x) + "\n"
+            str_repr += "Step Size X: " + str(self.step_size_x) + "\n"
             str_repr += "Step Size Y: " + str(self.step_size_y) + "\n"
             return str_repr
         return str_repr
@@ -317,7 +317,7 @@ class VolumeCalculationTool:
             self.iface.addToolBarIcon(action)
 
         if add_to_menu:
-            self.iface.addPluginToMenu(
+            self.iface.addPluginToVectorMenu(
                 self.menu,
                 action)
 
@@ -434,6 +434,8 @@ class VolumeCalculationTool:
     
     def writeResultsToLayer(self):
         if self.dlg.checkBox_add_field.isChecked():
+            index = 0
+            n_index = 0
             index = self.current_task_options.vector_layer.fields().lookupField(self.current_task_options.column_name)
             if (index == -1):
                 self.current_task_options.vector_layer.dataProvider().addAttributes([QgsField(self.current_task_options.column_name, QVariant.Double)])
@@ -481,8 +483,8 @@ class VolumeCalculationTool:
         dem_layers = self.dlg.mFieldComboHeightLayer.count()
         vector_layers = self.dlg.mFieldComboPolygon.count()
         if vector_layers == 0 or dem_layers == 0:
-            self.dlg.closeIt()
             self.dlg.popFatalErrorBox("No DEM layers or polygon layers found/selected ! Closing plugin, please make sure both are available")
+            self.dlg.closeIt()
         
     def gatherInputInfo(self):
         self.validateMinimumInput()
