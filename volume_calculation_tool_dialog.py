@@ -40,6 +40,7 @@ from enum import Enum
 
 DEFAULT_ATTRIBUTE_NAME = "V_above"
 DEFAULT_ATTRIBUTE_NAME_NEG = "V_below"
+ATTRIBUTE_FIELD_MAX_LENGTH = 10
 
 # This loads your .ui file so that PyQt can populate your plugin with the elements from Qt Designer
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
@@ -115,6 +116,8 @@ class VolumeCalculationToolDialog(QtWidgets.QDialog, FORM_CLASS):
         self.doubleSpinBoxBaseLevel.setValue(0.00)
         self.doubleSpinBoxBaseLevel.setRange(-100000, 100000)
         
+        self.fieldName.setMaxLength(ATTRIBUTE_FIELD_MAX_LENGTH)
+        self.fieldName_2.setMaxLength(ATTRIBUTE_FIELD_MAX_LENGTH)
         self.doubleSpinBoxSampleStepX.setValue(1)
         self.doubleSpinBoxSampleStepY.setValue(1)
         self.doubleSpinBoxSampleStepX.setRange(0, 100000)

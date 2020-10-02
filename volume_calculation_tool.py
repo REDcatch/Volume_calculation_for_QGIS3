@@ -50,10 +50,10 @@ from datetime import datetime
 
 MESSAGE_CATEGORY = "VolumeTask"
 ACCURATE_WORKFLOW_DESCRIPTION = "ACCURATE_VOL_CALCULATION"
-SIMPLE_WORKFLOW_BASE_PREFIX = "_VBASE"
-SIMPLE_WORKFLOW_HEIGHT_PREFIX = "_VHEIGHT"
-SIMPLE_WORKFLOW_BASE_HEIGHT_COLUMN_NAME = "_VBASEmean"
-SIMPLE_WORKFLOW_HEIGHT_COLUMN_NAME = "_VHEIGHTmean"
+SIMPLE_WORKFLOW_BASE_PREFIX = "_VB"
+SIMPLE_WORKFLOW_HEIGHT_PREFIX = "_VH"
+SIMPLE_WORKFLOW_BASE_HEIGHT_COLUMN_NAME = "_VBmean"
+SIMPLE_WORKFLOW_HEIGHT_COLUMN_NAME = "_VHmean"
 CONSTANT_DEFAULT_SAMPLE_MULTIPLIER = 2
 DEFAULT_SAMPLE_STEP_SIZE = 1.00
 
@@ -448,24 +448,22 @@ class VolumeCalculationTool:
             index = self.current_task_options.vector_layer.fields().lookupField(self.current_task_options.column_name)
             if self.current_task_options.isInAccurateWorkflow and self.current_task_options.counting_option == CountOptions.COUNT_ABOVE_AND_BELOW:
                 n_index = self.current_task_options.vector_layer.fields().lookupField(self.current_task_options.column_name_neg)
-            self.current_task_options.vector_layer.startEditing()
-            for feature in self.current_task_options.vector_layer.getFeatures():
-                if feature == None:
-                    continue
-                if self.current_task_options.isInAccurateWorkflow:
-                    pos, neg = self.results[feature.id()]
-                    if self.current_task_options.counting_option == CountOptions.COUNT_ABOVE_AND_BELOW:
-                        feature.setAttribute(index, pos)
-                        feature.setAttribute(n_index, neg)
+            with edit(self.current_task_options.vector_layer):
+                for feature in self.current_task_options.vector_layer.getFeatures():
+                    if feature == None:
+                        continue
+                    if self.current_task_options.isInAccurateWorkflow:
+                        pos, neg = self.results[feature.id()]
+                        feature.setAttribute(index, round(pos,1))
+                        if self.current_task_options.counting_option == CountOptions.COUNT_ABOVE_AND_BELOW:
+                            feature.setAttribute(n_index, round(neg,1))
                     else:
-                        feature.setAttribute(index, pos)
-                else:
-                    feature.setAttribute(index, self.results[feature.id()])
-                self.current_task_options.vector_layer.updateFeature(feature)
-            self.current_task_options.vector_layer.commitChanges()
-    
+                        feature.setAttribute(index, round(self.results[feature.id()],1))
+                    self.current_task_options.vector_layer.updateFeature(feature)
+                    
     def workflow(self):
         self.gatherInputInfo()
+        self.validateVectorConstraints()
         if self.dlg.radioButtonAccurate.isChecked():
             self.current_task_options.isInAccurateWorkflow = True
             self.doAccurateWorkflow()
@@ -484,6 +482,18 @@ class VolumeCalculationTool:
         vector_layers = self.dlg.mFieldComboPolygon.count()
         if vector_layers == 0 or dem_layers == 0:
             self.dlg.popFatalErrorBox("No DEM layers or polygon layers found/selected ! Closing plugin, please make sure both are available")
+            self.dlg.closeIt()
+        
+    def validateVectorConstraints(self):
+        caps = self.current_task_options.vector_layer.dataProvider().capabilities()
+        if (not (caps & QgsVectorDataProvider.AddAttributes)) and self.dlg.checkBox_add_field.isChecked():
+            self.dlg.popFatalErrorBox("Cannot add attributes to vector layer, change input option or check layer. Closing plugin !")
+            self.dlg.closeIt()
+        if (not (caps & QgsVectorDataProvider.ChangeAttributeValues)) and self.dlg.checkBox_add_field.isChecked():
+            self.dlg.popFatalErrorBox("Cannot change attribute values of vector layer, change input option or check layer. Closing plugin !")
+            self.dlg.closeIt()
+        if (not (caps & QgsVectorDataProvider.DeleteAttributes)) and (not self.current_task_options.isInAccurateWorkflow):
+            self.dlg.popFatalErrorBox("Cannot change delete attribute values of vector layer, change volume calculation type or check layer. Closing plugin !")
             self.dlg.closeIt()
         
     def gatherInputInfo(self):
@@ -573,6 +583,7 @@ class VolumeCalculationTool:
                 if res:
                     average_height += val
             poly.base_line = average_height/count
+            print(average_height)
     
     def getMinHeightOfPolygonVertices(self, polygon_list, height_layer):
         for poly in polygon_list:
@@ -642,11 +653,11 @@ class VolumeCalculationTool:
             self.dlg.logOutput.append("Polygon Id: " + str(ident))
             if self.current_task_options.isInAccurateWorkflow:
                 val, n_val = self.results[ident]
-                self.dlg.logOutput.append("Above Volume (m3):" + str(val))
-                self.dlg.logOutput.append("Below Volume (m3):" + str(n_val))
+                self.dlg.logOutput.append("Above Volume (m3):" + str(round(val,1)))
+                self.dlg.logOutput.append("Below Volume (m3):" + str(round(n_val,1)))
             else:
                 val = self.results[ident]
-                self.dlg.logOutput.append("Volume (m3):" + str(val))
+                self.dlg.logOutput.append("Volume (m3):" + str(round(val,1)))
         sb = self.dlg.logOutput.verticalScrollBar()
         sb.setValue(sb.maximum())
 
