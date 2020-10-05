@@ -332,12 +332,12 @@
      <rect>
       <x>10</x>
       <y>34</y>
-      <width>221</width>
+      <width>231</width>
       <height>23</height>
      </rect>
     </property>
     <property name="text">
-     <string>Add Volume As New Field</string>
+     <string>Add/Update Volume As Field</string>
     </property>
    </widget>
    <widget class="QLabel" name="label_16">
@@ -350,7 +350,7 @@
      </rect>
     </property>
     <property name="text">
-     <string>Field Name:</string>
+     <string>Above Name:</string>
     </property>
    </widget>
    <widget class="QLineEdit" name="fieldName_2">
@@ -373,7 +373,7 @@
      </rect>
     </property>
     <property name="text">
-     <string>Field Name:</string>
+     <string>Below Name:</string>
     </property>
    </widget>
   </widget>
