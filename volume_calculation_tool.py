@@ -57,7 +57,7 @@ SIMPLE_WORKFLOW_HEIGHT_COLUMN_NAME = "_VHmean"
 CONSTANT_DEFAULT_SAMPLE_MULTIPLIER = 2
 DEFAULT_SAMPLE_STEP_SIZE = 1.00
 
-ICON_PATH = ":/plugins/VolumeCalculationTool/icon.svg"
+ICON_PATH = ":/plugins/volume_calculation_tool/icon.svg"
 
 
 class PolygonWrapper():
@@ -317,7 +317,7 @@ class VolumeCalculationTool:
             self.iface.addToolBarIcon(action)
 
         if add_to_menu:
-            self.iface.addPluginToVectorMenu(
+            self.iface.addPluginToRasterMenu(
                 self.menu,
                 action)
 
@@ -379,8 +379,8 @@ class VolumeCalculationTool:
                 self.dlg.mFieldComboBand.addItem(str(i))
         except IndexError:
             self.dlg.popFatalErrorBox("No DEM layers found ! Restart the plugin and make sure DEM layers are available")
-            return
-            
+            return 
+        
     def populateBandListForBase(self, layer_name):
         try:
             self.dlg.mFieldComboBandBase.clear()
@@ -391,7 +391,7 @@ class VolumeCalculationTool:
         except IndexError:
             self.dlg.popFatalErrorBox("No polygon layers found ! Restart the plugin and make sure polygon layers are available")
             return
-            
+        
     def determineBandListForHeight(self, index):
         self.populateBandListForHeight(self.dlg.mFieldComboHeightLayer.currentText())
     

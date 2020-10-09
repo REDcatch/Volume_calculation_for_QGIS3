@@ -41,6 +41,7 @@ SOURCES = \
 	volume_calculation_tool.py volume_calculation_tool_dialog.py
 
 PLUGINNAME = volume_calculation_tool
+PLUGINNAME_TMP = volume_calculation_tool_tmp
 
 PY_FILES = \
 	__init__.py \
@@ -48,7 +49,9 @@ PY_FILES = \
 
 UI_FILES = volume_calculation_tool_dialog_base.ui
 
-EXTRAS = metadata.txt icon.png
+EXTRAS = metadata.txt icon.svg icon.png
+
+EXAMPLE = example
 
 EXTRA_DIRS =
 
@@ -112,43 +115,14 @@ test: compile
 	@echo "e.g. source run-env-linux.sh <path to qgis install>; make test"
 	@echo "----------------------"
 
-deploy: compile doc
-	@echo
-	@echo "------------------------------------------"
-	@echo "Deploying plugin to your .qgis2 directory."
-	@echo "------------------------------------------"
-	# The deploy  target only works on unix like operating system where
-	# the Python plugin directory is located at:
-	# $HOME/$(QGISDIR)/python/plugins
-	mkdir -p $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME)
-	cp -vf $(PY_FILES) $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME)
-	cp -vf $(UI_FILES) $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME)
-	cp -vf $(COMPILED_RESOURCE_FILES) $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME)
-	cp -vf $(EXTRAS) $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME)
-	cp -vfr $(HELP) $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME)/help
-	# Copy extra directories if any
-	#(foreach EXTRA_DIR,(EXTRA_DIRS), cp -R (EXTRA_DIR) (HOME)/(QGISDIR)/python/plugins/(PLUGINNAME)/;)
-
-
-# The dclean target removes compiled python files from plugin directory
-# also deletes any .git entry
-dclean:
-	@echo
-	@echo "-----------------------------------"
-	@echo "Removing any compiled python files."
-	@echo "-----------------------------------"
-	find $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME) -iname "*.pyc" -delete
-	find $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME) -iname ".git" -prune -exec rm -Rf {} \;
-
-
 derase:
 	@echo
 	@echo "-------------------------"
 	@echo "Removing deployed plugin."
 	@echo "-------------------------"
-	rm -Rf $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME)
+	rm -Rf $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME_TMP)
 
-zip: deploy dclean
+zip: compile doc
 	@echo
 	@echo "---------------------------"
 	@echo "Creating plugin zip bundle."
@@ -156,28 +130,15 @@ zip: deploy dclean
 	# The zip target deploys the plugin and creates a zip file with the deployed
 	# content. You can then upload the zip file on http://plugins.qgis.org
 	rm -f $(PLUGINNAME).zip
-	cd $(HOME)/$(QGISDIR)/python/plugins; zip -9r $(CURDIR)/$(PLUGINNAME).zip $(PLUGINNAME)
-
-package: compile
-	# Create a zip package of the plugin named $(PLUGINNAME).zip.
-	# This requires use of git (your plugin development directory must be a
-	# git repository).
-	# To use, pass a valid commit or tag as follows:
-	#   make package VERSION=Version_0.3.2
-	@echo
-	@echo "------------------------------------"
-	@echo "Exporting plugin to zip package.	"
-	@echo "------------------------------------"
-	rm -f $(PLUGINNAME).zip
-	git archive --prefix=$(PLUGINNAME)/ -o $(PLUGINNAME).zip $(VERSION)
-	echo "Created package: $(PLUGINNAME).zip"
-
-upload: zip
-	@echo
-	@echo "-------------------------------------"
-	@echo "Uploading plugin to QGIS Plugin repo."
-	@echo "-------------------------------------"
-	$(PLUGIN_UPLOAD) $(PLUGINNAME).zip
+	mkdir -p $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME_TMP)
+	cp -vf $(PY_FILES) $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME_TMP)
+	cp -vf $(UI_FILES) $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME_TMP)
+	cp -vf $(COMPILED_RESOURCE_FILES) $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME_TMP)
+	cp -vf $(EXTRAS) $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME_TMP)
+	cp -vfr $(HELP) $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME_TMP)/help
+	cp -vfr $(EXAMPLE) $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME_TMP)
+	cd $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME_TMP); zip -9r $(CURDIR)/$(PLUGINNAME).zip *
+	rm -r $(HOME)/$(QGISDIR)/python/plugins/$(PLUGINNAME_TMP)
 
 clean:
 	@echo

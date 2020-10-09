@@ -1,5 +1,5 @@
 <RCC>
-    <qresource prefix="/plugins/VolumeCalculationTool" >
+    <qresource prefix="/plugins/volume_calculation_tool" >
         <file>icon.svg</file>
     </qresource>
 </RCC>

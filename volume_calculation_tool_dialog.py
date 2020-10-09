@@ -127,6 +127,7 @@ class VolumeCalculationToolDialog(QtWidgets.QDialog, FORM_CLASS):
         self.fieldName_2.setPlaceholderText(DEFAULT_ATTRIBUTE_NAME_NEG)
         self.checkBox_add_field.setChecked(True)
         self.pushButtonExit.clicked.connect(self.closeIt)
+        self.pushButtonAbout.clicked.connect(self.popAboutBox)
     
     def toggleBaseLevelOptions(self, index):
         if index == 0:
@@ -214,8 +215,12 @@ class VolumeCalculationToolDialog(QtWidgets.QDialog, FORM_CLASS):
         
     def popFatalErrorBox(self, error_msg):
         msgBox = QMessageBox()
+        msgBox.setWindowTitle("Error")
         msgBox.setText(error_msg)
         msgBox.exec_()
         
     def popAboutBox(self):
-        pass
+        msgBox = QMessageBox()
+        msgBox.setWindowTitle("About")
+        msgBox.setText("Made by the team @ REDCatch, we also make other (hopefully) (useful) things :)")
+        msgBox.exec_()

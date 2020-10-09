@@ -5,8 +5,9 @@ The volume calculation tool is a plugin for QGIS which allows for easy calculati
 ## Installation
 
 - Use the internal QGIS plugin manager.
-- Download the repository and move it into the appropriate QGIS plugin folder. Note that the contents of the repository need to be put into a folder called `VolumeCalculationTool`
+- Download the repository and move it into the appropriate QGIS plugin folder.
 - In order to build/use the documentation use the makefile with the command `make doc` which should build the documentation html into a build folder inside the help folder.
+- In order to create a deployable zip simply use `make zip`
 
 ## Usage
 
