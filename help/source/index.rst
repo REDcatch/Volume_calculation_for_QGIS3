@@ -66,7 +66,7 @@ Mathematically, this method is an application of the mean value theorem for inte
 Mathematically, this method is essentially the Riemann sum of the (height) function as defined by the raster layer i.e. the polygon is divided into small rectangular prisms whose width (x) and length (y) is defined by the step size parameters. The height of one such prism is the sampled value from the raster layer at the centroid of the rectangular prism. Essentially, a bounding box is created around the polygon which is then filled with prisms of the given size, then each prism's centroid is checked whether it is inside the polygon and, if that is the case, added to the volume. In theory, this method will become more accurate the smaller the step size becomes. However, due to how it is implemented and how raster layers work this may not be always true. There are two important notes one needs to be aware of when using this method:
 
 * The "slicing" of the polygon is not necessarily aligned with the raster layer, which can lead in some cases to substantial inaccuracies.
-* Raster layers have a set resolution, which means at a certain point smaller step size will not lead to greater accuracy but just include more and more noise.
+* Raster layers have a set resolution, which means step sizes signficiantly below the raster resolution do probably not benefit substantially, in terms of accuracy, from the increased processing time. 
 
 There are three methods as to how one can count these prisms, which all depend on the base level:
 
@@ -77,7 +77,7 @@ There are three methods as to how one can count these prisms, which all depend o
 Example Dataset
 ...............
 
-An example dataset can be found in the folder ``example`` within the plugin folder. There a constant DEM and a realistic DEM are given with two vector layers for testing and learning.
+A realistic example dataset can be found in the folder ``example`` within the plugin folder. There a DEM and vector layers can be found, aiding in understanding and testing the plugin. Additionally, a small video tutorial is also included.
 
 Errors and Other Issues
 .......................
