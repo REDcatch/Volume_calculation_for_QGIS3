@@ -12,6 +12,7 @@ The volume calculation tool is a plugin for QGIS which allows for easy calculati
 ## Usage
 
 See the documentation in the help folder.
+and/or the tutorial video in the example folder
 
 ## Build With
 
