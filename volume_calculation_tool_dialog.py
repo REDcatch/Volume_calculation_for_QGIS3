@@ -34,7 +34,7 @@ import os
 from qgis.PyQt import uic
 from qgis.PyQt import QtWidgets
 from qgis.PyQt.QtGui import QDesktopServices
-from qgis.PyQt.QtWidgets import QMessageBox
+from qgis.PyQt.QtWidgets import QMessageBox, QFileDialog
 from qgis.PyQt.QtCore import QUrl
 from enum import Enum
 
@@ -101,6 +101,9 @@ class VolumeCalculationToolDialog(QtWidgets.QDialog, FORM_CLASS):
         self.pushButtonStartCalculation.clicked.connect(workflow_function)
         self.pushButtonCancelCalculation.clicked.connect(cancel_long_workflow)
         self.pushButtonHelp.clicked.connect(self.show_help)
+
+        self.clearLog.clicked.connect(self.clear_log)
+        self.saveLog.clicked.connect(self.log_save)
 
         self.mFieldComboHeightLayerBase.setEnabled(False)
         self.mFieldComboBandBase.setEnabled(False)
@@ -224,3 +227,13 @@ class VolumeCalculationToolDialog(QtWidgets.QDialog, FORM_CLASS):
         msgBox.setWindowTitle("About")
         msgBox.setText("Made by the team @ REDCatch, we also make other (hopefully) (useful) things :)")
         msgBox.exec_()
+        
+    def log_save(self):
+        name = QFileDialog.getSaveFileName(self, 'Save Log To File')
+        file = open(name[0],'w')
+        log_text = self.logOutput.toPlainText()
+        file.write(log_text)
+        file.close()
+        
+    def clear_log(self):
+        self.logOutput.clear()

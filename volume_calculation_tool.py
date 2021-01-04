@@ -464,6 +464,7 @@ class VolumeCalculationTool:
     def workflow(self):
         self.gatherInputInfo()
         self.validateVectorConstraints()
+        self.validateCRSConstraints()
         if self.dlg.radioButtonAccurate.isChecked():
             self.current_task_options.isInAccurateWorkflow = True
             self.doAccurateWorkflow()
@@ -495,7 +496,14 @@ class VolumeCalculationTool:
         if (not (caps & QgsVectorDataProvider.DeleteAttributes)) and (not self.current_task_options.isInAccurateWorkflow):
             self.dlg.popFatalErrorBox("Cannot change delete attribute values of vector layer, change volume calculation type or check layer. Closing plugin !")
             self.dlg.closeIt()
-        
+    
+    def validateCRSConstraints(self):
+        crs_vector = self.current_task_options.vector_layer.crs()
+        crs_height = self.current_task_options.height_layer.crs()
+        if crs_vector != crs_height:
+            self.dlg.popFatalErrorBox("CRS of input layers do not match polygon: {} height: {}. Closing plugin !".format(crs_vector, crs_height))
+            self.dlg.closeIt()
+
     def gatherInputInfo(self):
         self.validateMinimumInput()
         height_layer = QgsProject.instance().mapLayersByName(self.dlg.mFieldComboHeightLayer.currentText())[0]
