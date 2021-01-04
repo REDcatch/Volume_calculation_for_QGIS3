@@ -553,10 +553,10 @@ class VolumeCalculationTool:
         current_option = self.dlg.mFieldComboBaseLevelMethod.currentIndex()
         base_line_option = None
         base_line_layer = None
-        if current_option == 1:
+        if current_option == 0:
             self.getMinHeightOfPolygonVertices(polygon_list, height_layer)
             base_line_option = BaseLevelOptions.APPROXIMATE_VIA_MIN
-        if current_option == 0:
+        if current_option == 1:
             self.getAvgHeightOfPolygonVertices(polygon_list, height_layer)
             base_line_option = BaseLevelOptions.APPROXIMATE_VIA_AVG
         if current_option == 2:
@@ -679,4 +679,6 @@ class VolumeCalculationTool:
         if top_entry == "":
             return DEFAULT_SAMPLE_STEP_SIZE
         x_pixel_size = round(abs((QgsProject.instance().mapLayersByName(top_entry)[0]).rasterUnitsPerPixelX()),2)
+        if x_pixel_size <= 0:
+           return DEFAULT_SAMPLE_STEP_SIZE    
         return (x_pixel_size * CONSTANT_DEFAULT_SAMPLE_MULTIPLIER)
