@@ -2,7 +2,7 @@
 name=Volume Calculation Tool
 qgisMinimumVersion=3.0
 description=Calculates volume based on DEM layers
-version=0.1
+version=0.2
 author=REDcatch GmbH.
 email=support@redcatch.at
 
