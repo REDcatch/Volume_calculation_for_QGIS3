@@ -433,6 +433,7 @@ class VolumeCalculationTool:
         self.dlg.unlockGUI()
     
     def writeResultsToLayer(self):
+        rounding_cutoff = self.dlg.outputAccuracy.value()
         if self.dlg.checkBox_add_field.isChecked():
             index = 0
             n_index = 0
@@ -454,11 +455,11 @@ class VolumeCalculationTool:
                         continue
                     if self.current_task_options.isInAccurateWorkflow:
                         pos, neg = self.results[feature.id()]
-                        feature.setAttribute(index, round(pos,1))
+                        feature.setAttribute(index, round(pos,rounding_cutoff))
                         if self.current_task_options.counting_option == CountOptions.COUNT_ABOVE_AND_BELOW:
-                            feature.setAttribute(n_index, round(neg,1))
+                            feature.setAttribute(n_index, round(neg,rounding_cutoff))
                     else:
-                        feature.setAttribute(index, round(self.results[feature.id()],1))
+                        feature.setAttribute(index, round(self.results[feature.id()],rounding_cutoff))
                     self.current_task_options.vector_layer.updateFeature(feature)
                     
     def workflow(self):
@@ -656,16 +657,17 @@ class VolumeCalculationTool:
         self.dlg.logOutput.append("===========")
         self.dlg.logOutput.append(datetime.now().strftime('%H:%M:%S'))
         self.dlg.logOutput.append(str(self.current_task_options))
+        rounding_cutoff = self.dlg.outputAccuracy.value()
         for key in self.results:
             ident = key
             self.dlg.logOutput.append("Polygon Id: " + str(ident))
             if self.current_task_options.isInAccurateWorkflow:
                 val, n_val = self.results[ident]
-                self.dlg.logOutput.append("Above Volume (m3):" + str(round(val,1)))
-                self.dlg.logOutput.append("Below Volume (m3):" + str(round(n_val,1)))
+                self.dlg.logOutput.append("Above Volume (m3):" + str(round(val,rounding_cutoff)))
+                self.dlg.logOutput.append("Below Volume (m3):" + str(round(n_val,rounding_cutoff)))
             else:
                 val = self.results[ident]
-                self.dlg.logOutput.append("Volume (m3):" + str(round(val,1)))
+                self.dlg.logOutput.append("Volume (m3):" + str(round(val,rounding_cutoff)))
         sb = self.dlg.logOutput.verticalScrollBar()
         sb.setValue(sb.maximum())
 

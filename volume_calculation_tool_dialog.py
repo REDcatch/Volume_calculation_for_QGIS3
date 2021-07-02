@@ -119,6 +119,9 @@ class VolumeCalculationToolDialog(QtWidgets.QDialog, FORM_CLASS):
         self.doubleSpinBoxBaseLevel.setValue(0.00)
         self.doubleSpinBoxBaseLevel.setRange(-100000, 100000)
         
+        self.outputAccuracy.setValue(1)
+        self.outputAccuracy.setRange(1, 10000)
+        
         self.fieldName.setMaxLength(ATTRIBUTE_FIELD_MAX_LENGTH)
         self.fieldName_2.setMaxLength(ATTRIBUTE_FIELD_MAX_LENGTH)
         self.doubleSpinBoxSampleStepX.setValue(1)
@@ -188,6 +191,7 @@ class VolumeCalculationToolDialog(QtWidgets.QDialog, FORM_CLASS):
         self.mFieldComboCountingMethod.setEnabled(False)
         self.doubleSpinBoxSampleStepX.setEnabled(False)
         self.doubleSpinBoxSampleStepY.setEnabled(False)
+        self.outputAccuracy.setEnabled(False)
         self.mFieldComboCountingMethod.setEnabled(False)
         self.radioButtonAccurate.setEnabled(False)
         self.radioButtonSimple.setEnabled(False)
@@ -204,6 +208,7 @@ class VolumeCalculationToolDialog(QtWidgets.QDialog, FORM_CLASS):
         self.mFieldComboCountingMethod.setEnabled(True)
         self.doubleSpinBoxSampleStepX.setEnabled(True)
         self.doubleSpinBoxSampleStepY.setEnabled(True)
+        self.outputAccuracy.setEnabled(True)
         self.mFieldComboCountingMethod.setEnabled(True)
         self.radioButtonAccurate.setEnabled(True)
         self.radioButtonSimple.setEnabled(True)
