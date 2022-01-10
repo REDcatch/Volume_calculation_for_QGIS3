@@ -55,9 +55,9 @@ class BaseLevelOptions(Enum):
     
     def __str__(self):
         if self.value == 0:
-            return "Approximate base level via AVERAGE of polygon vertices"
-        if self.value == 1:
             return "LOWEST Point: Use minimum height of polygon vertices"
+        if self.value == 1:
+            return "Approximate base level via AVERAGE of polygon vertices"
         if self.value == 2:
             return "Use a SECOND DEM layer as a base"
         if self.value == 3:
