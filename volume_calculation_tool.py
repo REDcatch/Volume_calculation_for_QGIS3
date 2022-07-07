@@ -29,6 +29,9 @@
  ***************************************************************************/
 """
 
+# TODO: m3 or ft3 (cubic feet) ... depending on DEM layer projection
+#       or adjustabel, like yds3 (cubic yards)
+
 import processing
 from processing.core.Processing import Processing
 Processing.initialize()
