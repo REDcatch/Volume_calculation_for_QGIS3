@@ -399,7 +399,7 @@
      </rect>
     </property>
     <property name="text">
-     <string>Accurate Approxiamation (slower, but more options) </string>
+     <string>Accurate Approximation (slower, but more options) </string>
     </property>
    </widget>
    <widget class="QRadioButton" name="radioButtonSimple">
