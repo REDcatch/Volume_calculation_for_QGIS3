@@ -2,9 +2,10 @@
 name=Volume Calculation Tool
 qgisMinimumVersion=3.0
 supportsQt6=True
+qgisMaximumVersion=4.99
 description=Calculates volume based on DEM layers
-version=0.4
-author=REDcatch GmbH.
+version=0.5
+author=REDcatch GmbH
 email=support@redcatch.at
 
 about=This plugin allows to calculate the volume inside multiple polygons based on a DEM layer.
@@ -14,7 +15,8 @@ repository=https://github.com/REDcatch/Volume_calculation_for_QGIS3
 
 hasProcessingProvider=no
 # Uncomment the following line and add your changelog:
-# changelog=
+changelog=QGIS 4 compatible, added multiple features
+
 
 # Tags are comma separated with spaces allowed
 tags=vector, dem, calculator, processing, raster, statistics, analysis, volume, drone

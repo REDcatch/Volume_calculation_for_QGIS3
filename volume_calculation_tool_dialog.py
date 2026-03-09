@@ -8,7 +8,7 @@
                              -------------------
         begin                : 2020-09-23
         git sha              : $Format:%H$
-        copyright            : (C) 2020 by REDcatch GmbH.
+        copyright            : (C) 2020+ by REDcatch GmbH.
         email                : support@redcatch.at
  ***************************************************************************/
 
@@ -34,8 +34,8 @@ import os
 from qgis.PyQt import uic
 from qgis.PyQt import QtWidgets
 from qgis.PyQt.QtGui import QDesktopServices
-from qgis.PyQt.QtWidgets import QMessageBox, QFileDialog
-from qgis.PyQt.QtCore import QUrl
+from qgis.PyQt.QtWidgets import QMessageBox, QFileDialog, QAbstractSpinBox
+from qgis.PyQt.QtCore import QUrl, QSettings
 from enum import Enum
 
 DEFAULT_ATTRIBUTE_NAME = "V_above"
@@ -59,7 +59,7 @@ class BaseLevelOptions(Enum):
         if self.value == 1:
             return "Approximate base level via AVERAGE of polygon vertices"
         if self.value == 2:
-            return "Use a SECOND DEM layer as a base"
+            return "Use a SECOND DEM layer as a base (Surface to Surface)"
         if self.value == 3:
             return "Manually enter base level"
 
@@ -86,18 +86,23 @@ class CountOptions(Enum):
         
 
 
+
+
+def _exec_dialog(dialog):
+    """Qt5/Qt6 compatible dialog execution helper."""
+    if hasattr(dialog, "exec"):
+        return dialog.exec()
+    return dialog.exec_()
+
+
 class VolumeCalculationToolDialog(QtWidgets.QDialog, FORM_CLASS):
     def __init__(self, updateDefaultSampleStepOnHeightLayerChange, determineBandsForHeight, determineBandsForBase, workflow_function, cancel_long_workflow, parent=None):
         """Constructor."""
         super().__init__()
         self.setupUi(self)
         self.populateStaticOptions()
-        self.radioButtonAccurate.setChecked(True)
-        self.radioButtonSimple.setChecked(False)
         self.toggleAccurateWorkFlow()
 
-        self.radioButtonSimple.toggled.connect(self.toggleWorkflow)
-        self.radioButtonAccurate.toggled.connect(self.toggleAccurateWorkFlow)
         self.pushButtonStartCalculation.clicked.connect(workflow_function)
         self.pushButtonCancelCalculation.clicked.connect(cancel_long_workflow)
         self.pushButtonHelp.clicked.connect(self.show_help)
@@ -112,11 +117,19 @@ class VolumeCalculationToolDialog(QtWidgets.QDialog, FORM_CLASS):
         self.mFieldComboHeightLayer.currentIndexChanged.connect(determineBandsForHeight)
         self.mFieldComboHeightLayer.currentIndexChanged.connect(updateDefaultSampleStepOnHeightLayerChange)
         self.mFieldComboHeightLayerBase.currentIndexChanged.connect(determineBandsForBase)
-        self.mFieldComboBaseLevelMethod.currentIndexChanged.connect(self.toggleBaseLevelOptions)
+        self.mFieldComboBaseLevelMethod.currentIndexChanged.connect(self.onBaseLevelMethodChanged)
         
         self.progressBar.reset()
         self.progressBar.setRange(0, 100)
-        self.doubleSpinBoxBaseLevel.setValue(0.00)
+        self.doubleSpinBoxBaseLevel.setDecimals(3)
+        no_buttons = getattr(QAbstractSpinBox, "NoButtons", None)
+        if no_buttons is None and hasattr(QAbstractSpinBox, "ButtonSymbols"):
+            no_buttons = getattr(QAbstractSpinBox.ButtonSymbols, "NoButtons", None)
+        if no_buttons is not None:
+            self.doubleSpinBoxBaseLevel.setButtonSymbols(no_buttons)
+        self.doubleSpinBoxBaseLevel.setAccelerated(True)
+        self.doubleSpinBoxBaseLevel.setKeyboardTracking(False)
+        self.doubleSpinBoxBaseLevel.setValue(0.000)
         self.doubleSpinBoxBaseLevel.setRange(-100000, 100000)
         
         self.outputAccuracy.setValue(1)
@@ -132,47 +145,85 @@ class VolumeCalculationToolDialog(QtWidgets.QDialog, FORM_CLASS):
         self.fieldName.setPlaceholderText(DEFAULT_ATTRIBUTE_NAME)
         self.fieldName_2.setPlaceholderText(DEFAULT_ATTRIBUTE_NAME_NEG)
         self.checkBox_add_field.setChecked(True)
+        if hasattr(self, "checkBox_create_ndom"):
+            remembered_ndom = QSettings().value("REDcatch/VolumeCalculationTool/create_nDOM", False, type=bool)
+            self.checkBox_create_ndom.setChecked(bool(remembered_ndom))
+            self.checkBox_create_ndom.toggled.connect(self.storeNDOMPreference)
         self.pushButtonExit.clicked.connect(self.closeIt)
         self.pushButtonAbout.clicked.connect(self.popAboutBox)
+        self.setBaseLevelUnitLabel("m")
+        self.onBaseLevelMethodChanged(self.mFieldComboBaseLevelMethod.currentIndex())
     
+
+    def storeNDOMPreference(self, checked):
+        QSettings().setValue("REDcatch/VolumeCalculationTool/create_nDOM", bool(checked))
+
+    def setBaseLevelUnitLabel(self, unit_suffix):
+        self.label_14.setText(f"Base Level ({unit_suffix})")
+
+    def clear_log(self):
+        self.logOutput.clear()
+
+    def append_log(self, text):
+        self.logOutput.append(text)
+
+    def getBaseLevelExplanation(self, index):
+        explanations = {
+            BaseLevelOptions.APPROXIMATE_VIA_MIN.value: (
+                "Info: *** Lowest point base level*** "
+                "The base height for each polygon is derived from the minimum height the polygons vertices. "
+                "Useful for simple stockpile-style at flat surfaces."
+            ),
+            BaseLevelOptions.APPROXIMATE_VIA_AVG.value: (
+                "Info: *** Average of polygon vertices *** "
+                "The base height for each polygon is approximated from the average height of the polygons vertices. "
+                "Useful when the polygon edge represents a more balanced surrounding base level."
+            ),
+            BaseLevelOptions.USE_DEM_LAYER.value: (
+                "Info: *** Second DEM layer (Surface to Surface) *** "
+                "The selected base DEM is used as comparison surface. "
+                "Useful for cut/fill workflows, terrain change, or comparing two surfaces directly."
+            ),
+            BaseLevelOptions.MANUAL_BASE_LEVEL.value: (
+                "Info: *** Manual base level *** "
+                "A single constant base height is used for the all polygons. "
+                "Useful when you already know the reference elevation that should be used."
+            ),
+        }
+        return explanations.get(index, "")
+
+    def onBaseLevelMethodChanged(self, index):
+        self.toggleBaseLevelOptions(index)
+        self.clear_log()
+        explanation = self.getBaseLevelExplanation(index)
+        if explanation:
+            self.append_log(explanation)
+
     def toggleBaseLevelOptions(self, index):
-        if index == 0:
-            self.mFieldComboHeightLayerBase.setEnabled(False)
-            self.mFieldComboBandBase.setEnabled(False)
-            self.doubleSpinBoxBaseLevel.setEnabled(False)
-        if index == 1:
-            self.mFieldComboHeightLayerBase.setEnabled(False)
-            self.mFieldComboBandBase.setEnabled(False)
-            self.doubleSpinBoxBaseLevel.setEnabled(False)
-        if index == 2:
-            self.mFieldComboHeightLayerBase.setEnabled(True)
-            self.mFieldComboBandBase.setEnabled(True)
-            self.doubleSpinBoxBaseLevel.setEnabled(False)
-        if index == 3:
-            self.mFieldComboHeightLayerBase.setEnabled(False)
-            self.mFieldComboBandBase.setEnabled(False)
-            self.doubleSpinBoxBaseLevel.setEnabled(True)
+        """Enable only the controls needed for the selected base-level mode."""
+        uses_second_dem = index == BaseLevelOptions.USE_DEM_LAYER.value
+        uses_manual_base = index == BaseLevelOptions.MANUAL_BASE_LEVEL.value
+
+        self.mFieldComboHeightLayerBase.setEnabled(uses_second_dem)
+        self.mFieldComboBandBase.setEnabled(uses_second_dem)
+        self.doubleSpinBoxBaseLevel.setEnabled(uses_manual_base)
 
     def closeIt(self): 
         self.close()
         
     def show_help(self):
-        help_file = 'file:///%s/help/build/html/index.html' % os.path.dirname(__file__)
-        QDesktopServices.openUrl(QUrl(help_file))
+        QDesktopServices.openUrl(QUrl('https://www.redcatch.at/qgisvolume/'))
 
     def toggleWorkflow(self):
-        isActivatedSimple = self.radioButtonSimple.isChecked()
-        isActivatedAccurate = self.radioButtonAccurate.isChecked()
         self.progressBar.reset()
-        self.pushButtonStartCalculation.setEnabled(isActivatedSimple or isActivatedAccurate)
-        self.pushButtonCancelCalculation.setEnabled(isActivatedSimple or isActivatedAccurate)
-        
+        self.pushButtonStartCalculation.setEnabled(True)
+        self.pushButtonCancelCalculation.setEnabled(True)
+
     def toggleAccurateWorkFlow(self):
-        isActivated = self.radioButtonAccurate.isChecked()
-        self.mFieldComboCountingMethod.setEnabled(isActivated)
-        self.doubleSpinBoxSampleStepX.setEnabled(isActivated)
-        self.doubleSpinBoxSampleStepY.setEnabled(isActivated)
-        self.mFieldComboCountingMethod.setEnabled(isActivated)
+        self.mFieldComboCountingMethod.setEnabled(True)
+        self.doubleSpinBoxSampleStepX.setEnabled(True)
+        self.doubleSpinBoxSampleStepY.setEnabled(True)
+        self.mFieldComboCountingMethod.setEnabled(True)
         self.toggleWorkflow()
 
     def populateStaticOptions(self):
@@ -188,50 +239,63 @@ class VolumeCalculationToolDialog(QtWidgets.QDialog, FORM_CLASS):
 
     
     def lockupGUIDuringCalculation(self):
+        """Freeze editable controls while a calculation task is running."""
         self.mFieldComboCountingMethod.setEnabled(False)
         self.doubleSpinBoxSampleStepX.setEnabled(False)
         self.doubleSpinBoxSampleStepY.setEnabled(False)
         self.outputAccuracy.setEnabled(False)
-        self.mFieldComboCountingMethod.setEnabled(False)
-        self.radioButtonAccurate.setEnabled(False)
-        self.radioButtonSimple.setEnabled(False)
         self.doubleSpinBoxBaseLevel.setEnabled(False)
         self.pushButtonStartCalculation.setEnabled(False)
         self.pushButtonCancelCalculation.setEnabled(True)
         self.mFieldComboHeightLayer.setEnabled(False)
         self.mFieldComboPolygon.setEnabled(False)
+        self.mFieldComboBaseLevelMethod.setEnabled(False)
+        self.mFieldComboHeightLayerBase.setEnabled(False)
+        self.mFieldComboBandBase.setEnabled(False)
         self.checkBox_add_field.setEnabled(False)
+        if hasattr(self, "checkBox_create_ndom"):
+            self.checkBox_create_ndom.setEnabled(False)
         self.fieldName.setEnabled(False)
         self.fieldName_2.setEnabled(False)
         
     def unlockGUI(self):
+        """Restore GUI controls after a task finished or was cancelled."""
         self.mFieldComboCountingMethod.setEnabled(True)
         self.doubleSpinBoxSampleStepX.setEnabled(True)
         self.doubleSpinBoxSampleStepY.setEnabled(True)
         self.outputAccuracy.setEnabled(True)
-        self.mFieldComboCountingMethod.setEnabled(True)
-        self.radioButtonAccurate.setEnabled(True)
-        self.radioButtonSimple.setEnabled(True)
-        self.doubleSpinBoxBaseLevel.setEnabled(True)
         self.pushButtonStartCalculation.setEnabled(True)
         self.pushButtonCancelCalculation.setEnabled(False)
         self.mFieldComboHeightLayer.setEnabled(True)
         self.mFieldComboPolygon.setEnabled(True)
         self.checkBox_add_field.setEnabled(True)
+        if hasattr(self, "checkBox_create_ndom"):
+            self.checkBox_create_ndom.setEnabled(True)
         self.fieldName.setEnabled(True)
         self.fieldName_2.setEnabled(True)
+        self.mFieldComboBaseLevelMethod.setEnabled(True)
+        self.toggleBaseLevelOptions(self.mFieldComboBaseLevelMethod.currentIndex())
         
     def popFatalErrorBox(self, error_msg):
         msgBox = QMessageBox()
         msgBox.setWindowTitle("Error")
+        msgBox.setIcon(QMessageBox.Critical)
         msgBox.setText(error_msg)
-        msgBox.exec_()
+        _exec_dialog(msgBox)
+
+    def popWarningBox(self, warning_msg):
+        msgBox = QMessageBox()
+        msgBox.setWindowTitle("Warning")
+        warning_icon = QMessageBox.Icon.Warning if hasattr(QMessageBox, "Icon") else QMessageBox.Warning
+        msgBox.setIcon(warning_icon)
+        msgBox.setText(warning_msg)
+        _exec_dialog(msgBox)
         
     def popAboutBox(self):
         msgBox = QMessageBox()
         msgBox.setWindowTitle("About")
-        msgBox.setText("Made by the team @ REDCatch, we also make other (hopefully) (useful) things :)")
-        msgBox.exec_()
+        msgBox.setText("Made by www.REDcatch.at team members. We also make other (hopefully) (useful) things :)")
+        _exec_dialog(msgBox)
         
     def log_save(self):
         name = QFileDialog.getSaveFileName(self, 'Save Log To File')

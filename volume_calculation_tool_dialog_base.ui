@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version='1.0' encoding='UTF-8'?>
 <ui version="4.0">
  <class>VolumeDialogBase</class>
  <widget class="QDialog" name="VolumeDialogBase">
@@ -73,9 +73,9 @@
    <property name="geometry">
     <rect>
      <x>510</x>
-     <y>190</y>
+     <y>240</y>
      <width>291</width>
-     <height>511</height>
+     <height>461</height>
     </rect>
    </property>
   </widget>
@@ -83,9 +83,9 @@
    <property name="geometry">
     <rect>
      <x>510</x>
-     <y>160</y>
-     <width>131</width>
-     <height>31</height>
+     <y>214</y>
+     <width>80</width>
+     <height>24</height>
     </rect>
    </property>
    <property name="text">
@@ -238,10 +238,10 @@
    <widget class="QLabel" name="label_14">
     <property name="geometry">
      <rect>
-      <x>100</x>
-      <y>170</y>
-      <width>251</width>
-      <height>31</height>
+      <x>20</x>
+      <y>158</y>
+      <width>140</width>
+      <height>18</height>
      </rect>
     </property>
     <property name="text">
@@ -252,9 +252,9 @@
     <property name="geometry">
      <rect>
       <x>20</x>
-      <y>170</y>
-      <width>69</width>
-      <height>26</height>
+      <y>178</y>
+      <width>411</width>
+      <height>28</height>
      </rect>
     </property>
    </widget>
@@ -310,8 +310,8 @@
     <rect>
      <x>500</x>
      <y>10</y>
-     <width>291</width>
-     <height>151</height>
+     <width>301</width>
+     <height>196</height>
     </rect>
    </property>
    <property name="title">
@@ -320,20 +320,20 @@
    <widget class="QLineEdit" name="fieldName">
     <property name="geometry">
      <rect>
-      <x>130</x>
-      <y>70</y>
-      <width>151</width>
-      <height>31</height>
+      <x>126</x>
+      <y>68</y>
+      <width>160</width>
+      <height>30</height>
      </rect>
     </property>
    </widget>
    <widget class="QCheckBox" name="checkBox_add_field">
     <property name="geometry">
      <rect>
-      <x>10</x>
-      <y>34</y>
-      <width>231</width>
-      <height>23</height>
+      <x>16</x>
+      <y>32</y>
+      <width>250</width>
+      <height>24</height>
      </rect>
     </property>
     <property name="text">
@@ -343,10 +343,10 @@
    <widget class="QLabel" name="label_16">
     <property name="geometry">
      <rect>
-      <x>10</x>
-      <y>68</y>
-      <width>111</width>
-      <height>31</height>
+      <x>16</x>
+      <y>74</y>
+      <width>95</width>
+      <height>22</height>
      </rect>
     </property>
     <property name="text">
@@ -356,24 +356,37 @@
    <widget class="QLineEdit" name="fieldName_2">
     <property name="geometry">
      <rect>
-      <x>130</x>
-      <y>110</y>
-      <width>151</width>
-      <height>31</height>
+      <x>126</x>
+      <y>114</y>
+      <width>160</width>
+      <height>30</height>
      </rect>
     </property>
    </widget>
    <widget class="QLabel" name="label_17">
     <property name="geometry">
      <rect>
-      <x>10</x>
-      <y>109</y>
-      <width>111</width>
-      <height>31</height>
+      <x>16</x>
+      <y>120</y>
+      <width>95</width>
+      <height>22</height>
      </rect>
     </property>
     <property name="text">
      <string>Below Name:</string>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="checkBox_create_ndom">
+    <property name="geometry">
+     <rect>
+      <x>16</x>
+      <y>154</y>
+      <width>270</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Create nDOM raster output</string>
     </property>
    </widget>
   </widget>
@@ -381,45 +394,19 @@
    <property name="geometry">
     <rect>
      <x>10</x>
-     <y>460</y>
+     <y>450</y>
      <width>451</width>
-     <height>211</height>
+     <height>221</height>
     </rect>
    </property>
    <property name="title">
-    <string>Type of Volume Calculation</string>
+    <string>Volume Calculation Method</string>
    </property>
-   <widget class="QRadioButton" name="radioButtonAccurate">
-    <property name="geometry">
-     <rect>
-      <x>10</x>
-      <y>60</y>
-      <width>391</width>
-      <height>21</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Accurate Approximation (slower, but more options) </string>
-    </property>
-   </widget>
-   <widget class="QRadioButton" name="radioButtonSimple">
-    <property name="geometry">
-     <rect>
-      <x>10</x>
-      <y>30</y>
-      <width>421</width>
-      <height>21</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Simple Mean Value  (fast, but problematic at cut/fill)</string>
-    </property>
-   </widget>
    <widget class="QLabel" name="label_2">
     <property name="geometry">
      <rect>
       <x>40</x>
-      <y>90</y>
+      <y>50</y>
       <width>131</width>
       <height>21</height>
      </rect>
@@ -432,7 +419,7 @@
     <property name="geometry">
      <rect>
       <x>40</x>
-      <y>110</y>
+      <y>70</y>
       <width>391</width>
       <height>31</height>
      </rect>
@@ -526,8 +513,8 @@
     <rect>
      <x>690</x>
      <y>710</y>
-     <width>101</width>
-     <height>21</height>
+     <width>89</width>
+     <height>25</height>
     </rect>
    </property>
    <property name="text">
@@ -537,10 +524,10 @@
   <widget class="QPushButton" name="saveLog">
    <property name="geometry">
     <rect>
-     <x>580</x>
+     <x>548</x>
      <y>710</y>
-     <width>101</width>
-     <height>21</height>
+     <width>89</width>
+     <height>25</height>
     </rect>
    </property>
    <property name="text">
@@ -548,6 +535,6 @@
    </property>
   </widget>
  </widget>
- <resources/>
- <connections/>
+ <resources />
+ <connections />
 </ui>

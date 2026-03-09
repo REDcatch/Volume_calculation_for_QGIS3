@@ -41,6 +41,7 @@ from qgis.PyQt.QtGui import *
 from qgis.PyQt.QtWidgets import *
 from qgis.gui import QgsMessageBar
 from qgis.core import *
+from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry
 
 # Initialize Qt resources from file resources.py
 from .resources import *
@@ -48,19 +49,21 @@ from .resources import *
 from .volume_calculation_tool_dialog import VolumeCalculationToolDialog
 from .volume_calculation_tool_dialog import BaseLevelOptions, CountOptions, DEFAULT_ATTRIBUTE_NAME, DEFAULT_ATTRIBUTE_NAME_NEG
 import os.path
+import shutil
 import copy
+import math
 from datetime import datetime
 
 MESSAGE_CATEGORY = "VolumeTask"
 ACCURATE_WORKFLOW_DESCRIPTION = "ACCURATE_VOL_CALCULATION"
-SIMPLE_WORKFLOW_BASE_PREFIX = "_VB"
-SIMPLE_WORKFLOW_HEIGHT_PREFIX = "_VH"
-SIMPLE_WORKFLOW_BASE_HEIGHT_COLUMN_NAME = "_VBmean"
-SIMPLE_WORKFLOW_HEIGHT_COLUMN_NAME = "_VHmean"
 CONSTANT_DEFAULT_SAMPLE_MULTIPLIER = 2
 DEFAULT_SAMPLE_STEP_SIZE = 1.00
 
 ICON_PATH = ":/plugins/volume_calculation_tool/icon.svg"
+
+NODATA_VALUE = -9999.0
+GDAL_OPTIONS_LZW = "COMPRESS=LZW"
+GDAL_OPTIONS_LZW_FLOAT = "COMPRESS=LZW|PREDICTOR=3"
 
 
 class PolygonWrapper():
@@ -75,7 +78,7 @@ class PolygonWrapper():
 
 class VolumeTaskOptions():
     def __init__(self, polygons, sampling_height_layer, step_size_x, step_size_y, counting_option, base_line_option, base_line_height_layer, column_name, column_name_neg
-                 , height_dem_band, base_dem_band, vector_layer=None):
+                 , height_dem_band, base_dem_band, vector_layer=None, create_ndom=False):
         self.polygons = polygons
         self.height_layer = sampling_height_layer
         self.step_size_x = step_size_x
@@ -89,6 +92,7 @@ class VolumeTaskOptions():
         self.height_dem_band = height_dem_band
         self.base_dem_band = base_dem_band
         self.isInAccurateWorkflow = False
+        self.create_ndom = bool(create_ndom)
         
     def copy_constructor(self):
         cloned_p = []
@@ -104,7 +108,9 @@ class VolumeTaskOptions():
                                      self.column_name,
                                      self.column_name_neg,
                                      self.height_dem_band,
-                                     self.base_dem_band)
+                                     self.base_dem_band,
+                                     self.vector_layer,
+                                     self.create_ndom)
         return VolumeTaskOptions(cloned_p, 
                                  self.height_layer.clone(),
                                  self.step_size_x, self.step_size_y, 
@@ -114,7 +120,9 @@ class VolumeTaskOptions():
                                  self.column_name,
                                  self.column_name_neg,
                                  self.height_dem_band,
-                                 self.base_dem_band)
+                                 self.base_dem_band,
+                                 self.vector_layer,
+                                 self.create_ndom)
     
     def __str__(self):
         str_repr = "Polygon Layer: "+ self.vector_layer.name() + "\n"
@@ -262,6 +270,7 @@ class VolumeCalculationTool:
         self.first_start = None
         
         self.isInAccurateWorkflow = False
+        self.create_ndom = False
         self.results = None
         self.height_layer = None
         self.vector_layer = None
@@ -274,6 +283,7 @@ class VolumeCalculationTool:
         self.task_manager.allTasksFinished.connect(self.calculationFinished)
         self.task_manager.progressChanged.connect(self.updateProgressBar)
         self.current_task_options = None
+        self.cancel_requested = False
         
 
     # noinspection PyMethodMayBeStatic
@@ -351,27 +361,59 @@ class VolumeCalculationTool:
             self.iface.removeToolBarIcon(action)
 
 
-    def isRasterLayer(self, x):
-        if type(x) == QgsRasterLayer:
-            return True
-        return False
- 
- 
-    def isVectorLayer(self, x):
-        if type(x) == QgsVectorLayer:
-            return True
-        return False
+    def isRasterLayer(self, layer):
+        return isinstance(layer, QgsRasterLayer)
+
+    def isVectorLayer(self, layer):
+        return isinstance(layer, QgsVectorLayer)
+
+    def getFirstLayerByName(self, layer_name):
+        matches = QgsProject.instance().mapLayersByName(layer_name)
+        return matches[0] if matches else None
+
+    def appendLogLine(self, text=""):
+        self.dlg.logOutput.append(str(text))
     
     def calculationFinished(self):
+        collected_results = {}
+        task_was_cancelled = self.cancel_requested
         for task in self.task_manager.tasks():
-            self.results = task.results
+            if hasattr(task, "isCanceled") and task.isCanceled():
+                task_was_cancelled = True
+            task_results = getattr(task, "results", None)
+            if isinstance(task_results, dict) and task_results:
+                collected_results.update(task_results)
+
+        self.results = collected_results
+
+        if task_was_cancelled:
+            self.dlg.logOutput.append("Operation cancelled by user. No output was written.")
+            self.dlg.progressBar.setValue(0)
+            self.cancel_requested = False
+            self.dlg.unlockGUI()
+            return
+
+        if not self.results:
+            self.dlg.popWarningBox("No calculation results were produced. Please verify the input data, polygon coverage and processing settings.")
+            self.dlg.progressBar.setValue(0)
+            self.cancel_requested = False
+            self.dlg.unlockGUI()
+            return
+
+        self.dlg.progressBar.setValue(60)
         self.updateOutputLog()
         self.writeResultsToLayer()
+        if self.current_task_options and self.current_task_options.create_ndom:
+            self.createNDOMRaster()
+        else:
+            self.dlg.progressBar.setValue(100)
+        self.cancel_requested = False
         self.dlg.unlockGUI()
 
     def updateProgressBar(self, task_id, progress):
         if progress >= 0.0:
-            self.dlg.progressBar.setValue(int(progress))
+            scaled_progress = int(round(min(max(progress, 0.0), 100.0) * 0.6))
+            self.dlg.progressBar.setValue(scaled_progress)
             
     def populateBandListForHeight(self, layer_name):
         self.dlg.mFieldComboBand.clear()
@@ -429,9 +471,10 @@ class VolumeCalculationTool:
         # show the dialog
         self.dlg.show()
         # Run the dialog event loop
-        result = self.dlg.exec_()
+        result = self.dlg.exec() if hasattr(self.dlg, "exec") else self.dlg.exec_()
         
     def cancelLongWorkflow(self):
+        self.cancel_requested = True
         self.task_manager.cancelAll()
         self.dlg.unlockGUI()
     
@@ -444,43 +487,45 @@ class VolumeCalculationTool:
             if (index == -1):
                 self.current_task_options.vector_layer.dataProvider().addAttributes([QgsField(self.current_task_options.column_name, QVariant.Double)])
                 self.current_task_options.vector_layer.updateFields()
-            if self.current_task_options.isInAccurateWorkflow and self.current_task_options.counting_option == CountOptions.COUNT_ABOVE_AND_BELOW:
+            if self.current_task_options.counting_option == CountOptions.COUNT_ABOVE_AND_BELOW:
                     n_index = self.current_task_options.vector_layer.fields().lookupField(self.current_task_options.column_name_neg)
                     if (n_index == -1):
                         self.current_task_options.vector_layer.dataProvider().addAttributes([QgsField(self.current_task_options.column_name_neg, QVariant.Double)])
                         self.current_task_options.vector_layer.updateFields()
             index = self.current_task_options.vector_layer.fields().lookupField(self.current_task_options.column_name)
-            if self.current_task_options.isInAccurateWorkflow and self.current_task_options.counting_option == CountOptions.COUNT_ABOVE_AND_BELOW:
+            if self.current_task_options.counting_option == CountOptions.COUNT_ABOVE_AND_BELOW:
                 n_index = self.current_task_options.vector_layer.fields().lookupField(self.current_task_options.column_name_neg)
             with edit(self.current_task_options.vector_layer):
+                missing_feature_results = 0
                 for feature in self.current_task_options.vector_layer.getFeatures():
                     if feature == None:
                         continue
-                    if self.current_task_options.isInAccurateWorkflow:
-                        pos, neg = self.results[feature.id()]
-                        feature.setAttribute(index, round(pos,rounding_cutoff))
-                        if self.current_task_options.counting_option == CountOptions.COUNT_ABOVE_AND_BELOW:
-                            feature.setAttribute(n_index, round(neg,rounding_cutoff))
-                    else:
-                        feature.setAttribute(index, round(self.results[feature.id()],rounding_cutoff))
+                    result_pair = self.results.get(feature.id()) if isinstance(self.results, dict) else None
+                    if result_pair is None:
+                        missing_feature_results += 1
+                        continue
+                    pos, neg = result_pair
+                    feature.setAttribute(index, round(pos,rounding_cutoff))
+                    if self.current_task_options.counting_option == CountOptions.COUNT_ABOVE_AND_BELOW:
+                        feature.setAttribute(n_index, round(neg,rounding_cutoff))
                     self.current_task_options.vector_layer.updateFeature(feature)
+                if missing_feature_results > 0:
+                    self.dlg.popWarningBox(
+                        f"{missing_feature_results} feature(s) did not receive result values. Please check feature IDs, polygon validity and whether the process was interrupted."
+                    )
                     
     def workflow(self):
-        self.gatherInputInfo()
-        self.validateVectorConstraints()
-        self.validateCRSConstraints()
-        if self.dlg.radioButtonAccurate.isChecked():
+        try:
+            self.cancel_requested = False
+            self.gatherInputInfo()
+            self.validateVectorConstraints()
+            if not self.validateCRSConstraints():
+                return
             self.current_task_options.isInAccurateWorkflow = True
             self.doAccurateWorkflow()
-        else:
-            self.current_task_options.isInAccurateWorkflow = False
-            self.doSimpleWorkflow()
-    
-    def doSimpleWorkflow(self):
-        self.getVolumeSimple()
-        self.updateOutputLog()
-        self.writeResultsToLayer()
-        self.cleanUpFields()
+        except Exception as exc:
+            self.dlg.unlockGUI()
+            self.dlg.popFatalErrorBox(f"Unexpected processing error: {exc}")
     
     def validateMinimumInput(self):
         dem_layers = self.dlg.mFieldComboHeightLayer.count()
@@ -497,21 +542,28 @@ class VolumeCalculationTool:
         if (not (caps & QgsVectorDataProvider.ChangeAttributeValues)) and self.dlg.checkBox_add_field.isChecked():
             self.dlg.popFatalErrorBox("Cannot change attribute values of vector layer, change input option or check layer. Closing plugin !")
             self.dlg.closeIt()
-        if (not (caps & QgsVectorDataProvider.DeleteAttributes)) and (not self.current_task_options.isInAccurateWorkflow):
-            self.dlg.popFatalErrorBox("Cannot change delete attribute values of vector layer, change volume calculation type or check layer. Closing plugin !")
-            self.dlg.closeIt()
     
     def validateCRSConstraints(self):
         crs_vector = self.current_task_options.vector_layer.crs()
         crs_height = self.current_task_options.height_layer.crs()
-        if crs_vector != crs_height:
-            self.dlg.popFatalErrorBox("CRS of input layers do not match polygon: {} height: {}. Closing plugin !".format(crs_vector, crs_height))
-            self.dlg.closeIt()
+
+        vector_valid = crs_vector.isValid() if hasattr(crs_vector, "isValid") else bool(crs_vector)
+        height_valid = crs_height.isValid() if hasattr(crs_height, "isValid") else bool(crs_height)
+
+        if (not vector_valid) or (not height_valid) or crs_vector != crs_height:
+            self.dlg.popWarningBox(
+                "Warning - Undefined or different coordinate systems! Be sure all INPUT data have the same projection, and that the QGIS project CRS is identical or at least defined, otherwise output may be incorrect or not possible"
+            )
+            return True
+
+        return True
 
     def gatherInputInfo(self):
         self.validateMinimumInput()
-        height_layer = QgsProject.instance().mapLayersByName(self.dlg.mFieldComboHeightLayer.currentText())[0]
-        vector_layer = QgsProject.instance().mapLayersByName(self.dlg.mFieldComboPolygon.currentText())[0]
+        height_layer = self.getFirstLayerByName(self.dlg.mFieldComboHeightLayer.currentText())
+        vector_layer = self.getFirstLayerByName(self.dlg.mFieldComboPolygon.currentText())
+        if height_layer is None or vector_layer is None:
+            raise ValueError("Selected DEM or polygon layer could not be found in the current QGIS project.")
         height_base_band = int(self.dlg.mFieldComboBandBase.currentText())
         height_band = int(self.dlg.mFieldComboBand.currentText())
         polygon_list = self.wrapPolygons(vector_layer)
@@ -530,7 +582,8 @@ class VolumeCalculationTool:
                                                       column_name_neg,
                                                       height_band,
                                                       height_base_band,
-                                                      vector_layer)
+                                                      vector_layer,
+                                                      bool(getattr(getattr(self, "dlg", None), "checkBox_create_ndom", None) and self.dlg.checkBox_create_ndom.isChecked()))
     
     def getFieldName(self):
         name_pos = self.dlg.fieldName.text()
@@ -573,7 +626,9 @@ class VolumeCalculationTool:
             base_line_option = BaseLevelOptions.APPROXIMATE_VIA_AVG
         if current_option == 2:
             base_line_option = BaseLevelOptions.USE_DEM_LAYER
-            base_line_layer = QgsProject.instance().mapLayersByName(self.dlg.mFieldComboHeightLayerBase.currentText())[0]
+            base_line_layer = self.getFirstLayerByName(self.dlg.mFieldComboHeightLayerBase.currentText())
+            if base_line_layer is None:
+                raise ValueError("The selected base DEM layer could not be found in the current QGIS project.")
         if current_option == 3:
             base_line_option = BaseLevelOptions.MANUAL_BASE_LEVEL
             self.setBaseLevelManually(polygon_list)
@@ -594,8 +649,7 @@ class VolumeCalculationTool:
                 val, res = height_layer.dataProvider().sample(QgsPointXY(vertex.x(), vertex.y()), 1)
                 if res:
                     average_height += val
-            poly.base_line = average_height/count
-            print(average_height)
+            poly.base_line = average_height / count if count else 0
     
     def getMinHeightOfPolygonVertices(self, polygon_list, height_layer):
         for poly in polygon_list:
@@ -612,67 +666,353 @@ class VolumeCalculationTool:
                         min_height = val
             poly.base_line = min_height
 
-    def getVolumeSimple(self):
-        #each entry is a list with the following content
-        #0 area
-        #1 height 
-        #2 base_line
-        internal_external_map = {}
-        results = {}
-        result = processing.run("qgis:zonalstatistics", { 'COLUMN_PREFIX' : SIMPLE_WORKFLOW_HEIGHT_PREFIX, 'INPUT_RASTER' : self.current_task_options.height_layer, 'INPUT_VECTOR': self.current_task_options.vector_layer, 'RASTER_BAND' : self.current_task_options.height_dem_band, 'STATS' : [2] })
+    def getHeightLayerHorizontalUnitText(self):
+        layer = self.current_task_options.height_layer
+        if layer is None:
+            return "unknown"
+        try:
+            crs = layer.crs()
+            if not crs.isValid():
+                return "unknown"
+            unit_text = QgsUnitTypes.encodeUnit(crs.mapUnits())
+            if unit_text:
+                return unit_text
+        except Exception:
+            pass
+        return "unknown"
+
+    def getVolumeUnitLabel(self):
+        unit_text = self.getHeightLayerHorizontalUnitText().lower()
+        if any(token in unit_text for token in ["foot", "feet", "ft"]):
+            return "ft3"
+        if any(token in unit_text for token in ["meter", "metre"]):
+            return "m3"
+        if "yard" in unit_text:
+            return "yd3"
+        return "units3"
+
+    def getOutputDirectoryForHeightLayer(self):
+        if self.current_task_options is None or self.current_task_options.height_layer is None:
+            return None
+        source = self.current_task_options.height_layer.source()
+        source_path = source.split('|')[0] if source else ''
+        if source_path and os.path.exists(source_path):
+            return os.path.dirname(source_path)
+        project_home = QgsProject.instance().homePath()
+        if project_home and os.path.isdir(project_home):
+            return project_home
+        return None
+
+    def getNDOMOutputPath(self):
+        output_dir = self.getOutputDirectoryForHeightLayer()
+        if not output_dir:
+            return None
+        source = self.current_task_options.height_layer.source()
+        source_path = source.split('|')[0] if source else ''
+        base_name = os.path.splitext(os.path.basename(source_path))[0] if source_path else self.current_task_options.height_layer.name()
+        return os.path.join(output_dir, f"{base_name}_nDOM.tif")
+
+    def getRasterUnitLabelWithSuperscript(self):
+        unit_text = self.getHeightLayerHorizontalUnitText().lower()
+        if any(token in unit_text for token in ["foot", "feet", "ft"]):
+            return "ft³"
+        if any(token in unit_text for token in ["meter", "metre"]):
+            return "m³"
+        if "yard" in unit_text:
+            return "yd³"
+        return "units³"
+
+    def showInfoMessage(self, title, text):
+        msg_box = QMessageBox(self.dlg if hasattr(self, "dlg") else None)
+        try:
+            msg_box.setIcon(QMessageBox.Icon.Warning)
+        except AttributeError:
+            msg_box.setIcon(QMessageBox.Warning)
+        msg_box.setWindowTitle(title)
+        msg_box.setText(text)
+        exec_fn = getattr(msg_box, "exec", None) or getattr(msg_box, "exec_", None)
+        if exec_fn:
+            exec_fn()
+
+    def askWarningOkCancel(self, title, text):
+        msg_box = QMessageBox(self.dlg if hasattr(self, "dlg") else None)
+        try:
+            msg_box.setIcon(QMessageBox.Icon.Warning)
+        except AttributeError:
+            msg_box.setIcon(QMessageBox.Warning)
+        msg_box.setWindowTitle(title)
+        msg_box.setText(text)
+        try:
+            ok_button = QMessageBox.StandardButton.Ok
+            cancel_button = QMessageBox.StandardButton.Cancel
+        except AttributeError:
+            ok_button = QMessageBox.Ok
+            cancel_button = QMessageBox.Cancel
+        msg_box.setStandardButtons(ok_button | cancel_button)
+        msg_box.setDefaultButton(ok_button)
+        exec_fn = getattr(msg_box, "exec", None) or getattr(msg_box, "exec_", None)
+        if not exec_fn:
+            return True
+        result = exec_fn()
+        try:
+            return result == QMessageBox.StandardButton.Ok
+        except AttributeError:
+            return result == QMessageBox.Ok
+
+    def prepareNDOMOutputPath(self, output_path):
+        existing_loaded = []
+        normalized_output = os.path.normcase(os.path.normpath(output_path))
+        for layer in list(QgsProject.instance().mapLayers().values()):
+            if isinstance(layer, QgsRasterLayer):
+                layer_source = getattr(layer, 'source', lambda: '')() or ''
+                layer_file = layer_source.split('|')[0]
+                if layer_file and os.path.normcase(os.path.normpath(layer_file)) == normalized_output:
+                    existing_loaded.append(layer)
+
+        if existing_loaded:
+            warning_text = (
+                'Warning - Existing _nDOM.tif output detected and currently loaded in QGIS. '
+                'Press OK to close the layer and overwrite it, or Cancel to return to the plugin.'
+            )
+            proceed = self.askWarningOkCancel('nDOM output exists', warning_text)
+            if not proceed:
+                return False
+            for layer in existing_loaded:
+                QgsProject.instance().removeMapLayer(layer.id())
+
+        if os.path.exists(output_path):
+            try:
+                os.remove(output_path)
+            except OSError:
+                pass
+        return True
+
+    def getPluginDirectory(self):
+        return os.path.dirname(os.path.abspath(__file__))
+
+    def getNDOMStyleTemplatePath(self):
+        return os.path.join(self.getPluginDirectory(), 'ndom_default.qml')
+
+    def buildNDOMStyleQML(self, target_qml_path, abs_max):
+        template_path = self.getNDOMStyleTemplatePath()
+        if abs_max <= 0.0:
+            abs_max = 1.0
+
+        step = abs_max / 4.0
+        values = {
+            '__CLASS_MIN__': f"{-abs_max:.1f}",
+            '__CLASS_MAX__': f"{abs_max:.1f}",
+            '__MIN__': f"{-abs_max:.1f}",
+            '__NEG_75__': f"{-3.0 * step:.1f}",
+            '__NEG_50__': f"{-2.0 * step:.1f}",
+            '__NEG_25__': f"{-1.0 * step:.1f}",
+            '__ZERO__': '0.0',
+            '__POS_25__': f"{1.0 * step:.1f}",
+            '__POS_50__': f"{2.0 * step:.1f}",
+            '__POS_75__': f"{3.0 * step:.1f}",
+            '__MAX__': f"{abs_max:.1f}",
+        }
+
+        with open(template_path, 'r', encoding='utf-8') as src:
+            qml_text = src.read()
+        for token, replacement in values.items():
+            qml_text = qml_text.replace(token, replacement)
+        with open(target_qml_path, 'w', encoding='utf-8') as dst:
+            dst.write(qml_text)
+        return target_qml_path
+
+    def applyNDOMStyle(self, raster_layer, output_path):
+        try:
+            provider = raster_layer.dataProvider()
+            stats = provider.bandStatistics(1, QgsRasterBandStats.All)
+            min_val = float(stats.minimumValue)
+            max_val = float(stats.maximumValue)
+            abs_max_raw = max(abs(min_val), abs(max_val))
+            if abs_max_raw <= 0.0:
+                abs_max_raw = 1.0
+            abs_max = math.ceil(abs_max_raw * 10.0) / 10.0
+            if abs_max <= 0.0:
+                abs_max = 1.0
+
+            target_qml_path = os.path.splitext(output_path)[0] + '.qml'
+            self.buildNDOMStyleQML(target_qml_path, abs_max)
+            raster_layer.loadNamedStyle(target_qml_path)
+            raster_layer.triggerRepaint()
+            try:
+                raster_layer.reload()
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    def createBaselineRasterForNDOM(self, output_dir):
+        baseline_field = "_base_lvl"
+        baseline_layer = QgsVectorLayer(f"Polygon?crs={self.current_task_options.vector_layer.crs().authid()}", "ndom_baseline_polygons", "memory")
+        provider = baseline_layer.dataProvider()
+        provider.addAttributes([QgsField(baseline_field, QVariant.Double)])
+        baseline_layer.updateFields()
+        feats = []
         for poly in self.current_task_options.polygons:
-            internal_external_map[poly.identifier_string] = []
-            internal_external_map[poly.identifier_string].append(poly.polygon_ref.area())
-        index = self.current_task_options.vector_layer.fields().lookupField(SIMPLE_WORKFLOW_HEIGHT_COLUMN_NAME)
-        for feature in self.current_task_options.vector_layer.getFeatures():
-            internal_external_map[feature.id()].append(feature.attributes()[index])
-        self.determineBaseHeights(internal_external_map)
-        for key in internal_external_map:
-            area = internal_external_map[key][0]
-            absolute_avg_height = abs(internal_external_map[key][1] - internal_external_map[key][2])
-            volume = area * absolute_avg_height
-            results[key] = volume
-        self.results = results
-        
-    def cleanUpFields(self):
-        index_height = self.current_task_options.vector_layer.fields().lookupField(SIMPLE_WORKFLOW_HEIGHT_COLUMN_NAME)
-        index_base =self.current_task_options.vector_layer.fields().lookupField(SIMPLE_WORKFLOW_BASE_HEIGHT_COLUMN_NAME)
-        if index_base != -1:
-            self.current_task_options.vector_layer.dataProvider().deleteAttributes([index_base])
-        if index_height != -1:
-            self.current_task_options.vector_layer.dataProvider().deleteAttributes([index_height])
-        self.current_task_options.vector_layer.updateFields()
-        
-        
-    def determineBaseHeights(self, internal_external_map):
-        if self.current_task_options.base_line_option == BaseLevelOptions.USE_DEM_LAYER:
-            settings_dict = { 'COLUMN_PREFIX' : SIMPLE_WORKFLOW_BASE_PREFIX, 'INPUT_RASTER' : self.current_task_options.base_line_height_layer, 'INPUT_VECTOR':self.current_task_options.vector_layer, 'RASTER_BAND' : self.current_task_options.base_dem_band, 'STATS' : [2] }
-            processing.run("qgis:zonalstatistics", settings_dict)
-            index = self.current_task_options.vector_layer.fields().lookupField(SIMPLE_WORKFLOW_BASE_HEIGHT_COLUMN_NAME)
-            for feature in self.current_task_options.vector_layer.getFeatures():
-                internal_external_map[feature.id()].append(feature.attributes()[index])
-        else:
-            for poly in self.current_task_options.polygons:
-                internal_external_map[poly.identifier_string].append(poly.base_line)
-            
-        
-    def updateOutputLog(self):
-        self.dlg.logOutput.append("===========")
-        self.dlg.logOutput.append(datetime.now().strftime('%H:%M:%S'))
-        self.dlg.logOutput.append(str(self.current_task_options))
-        rounding_cutoff = self.dlg.outputAccuracy.value()
-        for key in self.results:
-            ident = key
-            self.dlg.logOutput.append("Polygon Id: " + str(ident))
-            if self.current_task_options.isInAccurateWorkflow:
-                val, n_val = self.results[ident]
-                self.dlg.logOutput.append("Above Volume (m3):" + str(round(val,rounding_cutoff)))
-                self.dlg.logOutput.append("Below Volume (m3):" + str(round(n_val,rounding_cutoff)))
+            feat = QgsFeature(baseline_layer.fields())
+            feat.setGeometry(poly.polygon_ref)
+            feat.setAttribute(baseline_field, float(poly.base_line))
+            feats.append(feat)
+        provider.addFeatures(feats)
+        baseline_layer.updateExtents()
+
+        height_layer = self.current_task_options.height_layer
+        pixel_x = abs(height_layer.rasterUnitsPerPixelX())
+        pixel_y = abs(height_layer.rasterUnitsPerPixelY())
+        baseline_raster = os.path.join(output_dir, "_tmp_ndom_baseline.tif")
+        processing.run("gdal:rasterize", {
+            'INPUT': baseline_layer,
+            'FIELD': baseline_field,
+            'BURN': 0,
+            'USE_Z': False,
+            'UNITS': 1,
+            'WIDTH': pixel_x,
+            'HEIGHT': pixel_y,
+            'EXTENT': height_layer.extent(),
+            'NODATA': NODATA_VALUE,
+            'OPTIONS': 'COMPRESS=LZW',
+            'DATA_TYPE': 5,
+            'INIT': -9999,
+            'INVERT': False,
+            'EXTRA': '',
+            'OUTPUT': baseline_raster,
+        })
+        return baseline_raster
+
+    def createNDOMRaster(self):
+        output_path = self.getNDOMOutputPath()
+        if not output_path:
+            self.dlg.progressBar.setValue(100)
+            return
+        if not self.prepareNDOMOutputPath(output_path):
+            self.dlg.progressBar.setValue(100)
+            return
+        output_dir = os.path.dirname(output_path)
+        os.makedirs(output_dir, exist_ok=True)
+        temp_diff = os.path.join(output_dir, "_tmp_ndom_diff_float32.tif")
+        temp_base = None
+        try:
+            height_source = self.current_task_options.height_layer.source().split('|')[0]
+            calc_params = {
+                'INPUT_A': height_source,
+                'BAND_A': self.current_task_options.height_dem_band,
+                'INPUT_C': None,
+                'BAND_C': None,
+                'INPUT_D': None,
+                'BAND_D': None,
+                'INPUT_E': None,
+                'BAND_E': None,
+                'INPUT_F': None,
+                'BAND_F': None,
+                'FORMULA': 'A-B',
+                'NO_DATA': NODATA_VALUE,
+                'RTYPE': 5,
+                'OPTIONS': GDAL_OPTIONS_LZW_FLOAT,
+                'EXTRA': '',
+                'OUTPUT': temp_diff,
+            }
+
+            if self.current_task_options.base_line_option == BaseLevelOptions.USE_DEM_LAYER:
+                calc_params['INPUT_B'] = self.current_task_options.base_line_height_layer.source().split('|')[0]
+                calc_params['BAND_B'] = self.current_task_options.base_dem_band
             else:
-                val = self.results[ident]
-                self.dlg.logOutput.append("Volume (m3):" + str(round(val,rounding_cutoff)))
-        sb = self.dlg.logOutput.verticalScrollBar()
-        sb.setValue(sb.maximum())
+                temp_base = self.createBaselineRasterForNDOM(output_dir)
+                calc_params['INPUT_B'] = temp_base
+                calc_params['BAND_B'] = 1
+
+            processing.run("gdal:rastercalculator", calc_params)
+            self.dlg.progressBar.setValue(75)
+
+            height_crs = self.current_task_options.height_layer.crs() if self.current_task_options.height_layer else None
+            mask_crs = self.current_task_options.vector_layer.crs() if self.current_task_options.vector_layer else None
+            source_crs = height_crs if height_crs and height_crs.isValid() else None
+            target_crs = mask_crs if mask_crs and mask_crs.isValid() else source_crs
+
+            processing.run("gdal:cliprasterbymasklayer", {
+                'INPUT': temp_diff,
+                'MASK': self.current_task_options.vector_layer,
+                'SOURCE_CRS': source_crs,
+                'TARGET_CRS': target_crs,
+                'NODATA': NODATA_VALUE,
+                'ALPHA_BAND': False,
+                'CROP_TO_CUTLINE': True,
+                'KEEP_RESOLUTION': True,
+                'SET_RESOLUTION': False,
+                'X_RESOLUTION': None,
+                'Y_RESOLUTION': None,
+                'MULTITHREADING': False,
+                'OPTIONS': GDAL_OPTIONS_LZW_FLOAT,
+                'DATA_TYPE': 6,
+                'EXTRA': '',
+                'OUTPUT': output_path,
+            })
+            self.dlg.progressBar.setValue(90)
+
+            ndom_layer_name = os.path.splitext(os.path.basename(output_path))[0]
+            existing = QgsProject.instance().mapLayersByName(ndom_layer_name)
+            normalized_output = os.path.normcase(os.path.normpath(output_path))
+            for layer in existing:
+                layer_source = getattr(layer, 'source', lambda: '')() or ''
+                layer_file = layer_source.split('|')[0]
+                if layer_file and os.path.normcase(os.path.normpath(layer_file)) == normalized_output:
+                    QgsProject.instance().removeMapLayer(layer.id())
+            ndom_layer = QgsRasterLayer(output_path, ndom_layer_name)
+            if ndom_layer.isValid():
+                self.applyNDOMStyle(ndom_layer, output_path)
+                QgsProject.instance().addMapLayer(ndom_layer)
+            else:
+                pass
+        except Exception:
+            pass
+        finally:
+            self.dlg.progressBar.setValue(100)
+            for tmp_path in [temp_diff, temp_base]:
+                if tmp_path and os.path.exists(tmp_path):
+                    try:
+                        os.remove(tmp_path)
+                    except OSError:
+                        pass
+
+    def updateOutputLog(self):
+        volume_unit = self.getRasterUnitLabelWithSuperscript()
+        horizontal_unit = self.getHeightLayerHorizontalUnitText()
+        rounding_cutoff = self.dlg.outputAccuracy.value()
+
+        self.appendLogLine("========== Volume Calculation ==========")
+        self.appendLogLine("Time: " + datetime.now().strftime('%H:%M:%S'))
+        self.appendLogLine("Polygon Layer: " + self.current_task_options.vector_layer.name())
+        self.appendLogLine("Height Layer: " + self.current_task_options.height_layer.name())
+        self.appendLogLine("Base Line Option: " + str(self.current_task_options.base_line_option))
+        self.appendLogLine("Counting Option: " + str(self.current_task_options.counting_option))
+        self.appendLogLine("Step Size X: " + str(self.current_task_options.step_size_x))
+        self.appendLogLine("Step Size Y: " + str(self.current_task_options.step_size_y))
+
+        if self.current_task_options and self.current_task_options.create_ndom:
+            output_path = self.getNDOMOutputPath()
+            if output_path:
+                self.appendLogLine("nDOM Output: " + output_path)
+
+        self.appendLogLine("Detected horizontal unit: " + str(horizontal_unit))
+        if volume_unit == "units³":
+            self.appendLogLine(
+                "Volume unit could not be determined reliably from layer CRS. "
+                "Results are reported in derived layer units."
+            )
+
+        self.appendLogLine("---------- Results ----------")
+        for polygon_id, (above_volume, below_volume) in self.results.items():
+            self.appendLogLine("Polygon Id: " + str(polygon_id))
+            self.appendLogLine(f"  Above Volume ({volume_unit}): {round(above_volume, rounding_cutoff)}")
+            if self.current_task_options.counting_option == CountOptions.COUNT_ABOVE_AND_BELOW:
+                self.appendLogLine(f"  Below Volume ({volume_unit}): {round(below_volume, rounding_cutoff)}")
+
+        self.appendLogLine()
+        scroll_bar = self.dlg.logOutput.verticalScrollBar()
+        scroll_bar.setValue(scroll_bar.maximum())
 
     def doAccurateWorkflow(self):
         self.dlg.progressBar.reset()
@@ -686,12 +1026,43 @@ class VolumeCalculationTool:
         step_size = self.determineDefaultSamplingFromHeightLayer()
         self.dlg.doubleSpinBoxSampleStepX.setValue(step_size)
         self.dlg.doubleSpinBoxSampleStepY.setValue(step_size)
+        self.updateBaseLevelUnitLabelFromHeightLayer()
+
+    def getSelectedHeightLayer(self):
+        layer_name = self.dlg.mFieldComboHeightLayer.currentText()
+        if not layer_name:
+            return None
+        return self.getFirstLayerByName(layer_name)
+
+    def getUnitSuffixForLayer(self, layer):
+        if layer is None:
+            return "units"
+        try:
+            crs = layer.crs()
+            if not crs.isValid():
+                return "units"
+            unit_text = QgsUnitTypes.encodeUnit(crs.mapUnits()).lower()
+        except Exception:
+            return "units"
+        if any(token in unit_text for token in ["foot", "feet", "ft"]):
+            return "ft"
+        if any(token in unit_text for token in ["meter", "metre"]):
+            return "m"
+        if "yard" in unit_text:
+            return "yd"
+        return unit_text if unit_text else "units"
+
+    def updateBaseLevelUnitLabelFromHeightLayer(self):
+        layer = self.getSelectedHeightLayer()
+        unit_suffix = self.getUnitSuffixForLayer(layer)
+        if hasattr(self.dlg, "setBaseLevelUnitLabel"):
+            self.dlg.setBaseLevelUnitLabel(unit_suffix)
 
     def determineDefaultSamplingFromHeightLayer(self):
         top_entry = self.dlg.mFieldComboHeightLayer.currentText()
         if top_entry == "":
             return DEFAULT_SAMPLE_STEP_SIZE
-        x_pixel_size = round(abs((QgsProject.instance().mapLayersByName(top_entry)[0]).rasterUnitsPerPixelX()),2)
+        x_pixel_size = round(abs(self.getFirstLayerByName(top_entry).rasterUnitsPerPixelX()),2)
         if x_pixel_size <= 0:
            return DEFAULT_SAMPLE_STEP_SIZE    
         return (x_pixel_size * CONSTANT_DEFAULT_SAMPLE_MULTIPLIER)
