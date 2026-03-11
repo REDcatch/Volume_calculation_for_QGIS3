@@ -19,7 +19,7 @@ and/or the tutorial video in the example folder
 [Qgis-Plugin Builder](https://github.com/g-sherman/Qgis-Plugin-Builder/)
 
 ## License
-Copyright (C) 2020 REDcatch GmbH.
+Copyright (C) 2020-2026 REDcatch GmbH.
 [GPL](https://www.gnu.org/licenses/gpl-3.0.en.html)
 
     This program is free software: you can redistribute it and/or modify

@@ -8,7 +8,7 @@
                              -------------------
         begin                : 2020-09-23
         git sha              : $Format:%H$
-        copyright            : (C) 2020+ by REDcatch GmbH.
+        copyright            : (C) 2020-2026 by REDcatch GmbH.
         email                : support@redcatch.at
  ***************************************************************************/
 

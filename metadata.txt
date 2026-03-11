@@ -1,7 +1,6 @@
 [general]
 name=Volume Calculation Tool
 qgisMinimumVersion=3.0
-supportsQt6=True
 qgisMaximumVersion=4.99
 description=Calculates volume based on DEM layers
 version=0.5
@@ -15,7 +14,7 @@ repository=https://github.com/REDcatch/Volume_calculation_for_QGIS3
 
 hasProcessingProvider=no
 # Uncomment the following line and add your changelog:
-changelog=QGIS 4 compatible, added multiple features
+changelog=Compatible to QGIS 3+4, added local units support (m,ft), added nDOM heights output, minor improvements, bugfixes
 
 
 # Tags are comma separated with spaces allowed
