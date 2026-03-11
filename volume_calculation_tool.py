@@ -875,7 +875,7 @@ class VolumeCalculationTool:
             'EXTENT': height_layer.extent(),
             'NODATA': NODATA_VALUE,
             'OPTIONS': 'COMPRESS=LZW',
-            'DATA_TYPE': 5,
+            'DATA_TYPE': 6,
             'INIT': -9999,
             'INVERT': False,
             'EXTRA': '',
@@ -917,8 +917,28 @@ class VolumeCalculationTool:
             }
 
             if self.current_task_options.base_line_option == BaseLevelOptions.USE_DEM_LAYER:
-                calc_params['INPUT_B'] = self.current_task_options.base_line_height_layer.source().split('|')[0]
-                calc_params['BAND_B'] = self.current_task_options.base_dem_band
+                temp_base = os.path.join(output_dir, "_tmp_ndom_base_aligned.tif")
+                height_layer = self.current_task_options.height_layer
+                base_layer = self.current_task_options.base_line_height_layer
+                source_crs = base_layer.crs().authid() if base_layer and base_layer.crs().isValid() else None
+                target_crs = height_layer.crs().authid() if height_layer and height_layer.crs().isValid() else None
+                processing.run("gdal:warpreproject", {
+                    'INPUT': base_layer.source().split('|')[0],
+                    'SOURCE_CRS': source_crs,
+                    'TARGET_CRS': target_crs,
+                    'RESAMPLING': 1,
+                    'NODATA': NODATA_VALUE,
+                    'TARGET_RESOLUTION': abs(height_layer.rasterUnitsPerPixelX()),
+                    'OPTIONS': GDAL_OPTIONS_LZW_FLOAT,
+                    'DATA_TYPE': 6,
+                    'TARGET_EXTENT': height_layer.extent(),
+                    'TARGET_EXTENT_CRS': target_crs,
+                    'MULTITHREADING': False,
+                    'EXTRA': '',
+                    'OUTPUT': temp_base,
+                })
+                calc_params['INPUT_B'] = temp_base
+                calc_params['BAND_B'] = 1
             else:
                 temp_base = self.createBaselineRasterForNDOM(output_dir)
                 calc_params['INPUT_B'] = temp_base
